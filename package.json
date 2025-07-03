@@ -10,6 +10,7 @@
     "test": "jest --watchAll",
     "postinstall": "patch-package",
     "lint": "eslint .",
+    "type-check": "tsc --noEmit", 
     "prebuild": "cross-env APP_VARIANT=development expo prebuild --clean",
     "dev:android": "cross-env APP_VARIANT=development expo run:android",
     "dev:ios": "cross-env APP_VARIANT=development expo run:ios",
