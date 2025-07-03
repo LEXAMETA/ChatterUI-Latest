@@ -2,10 +2,10 @@ const IS_DEV = process.env.APP_VARIANT === 'development'
 
 module.exports = {
     expo: {
-        name: IS_DEV ? 'ChatterUI (DEV)' : 'ChatterUI',
+        name: IS_DEV ? 'ChatterUI-Latest (DEV)' : 'ChatterUI-Latest',
         newArchEnabled: true,
-        slug: 'ChatterUI',
-        version: '0.8.6',
+        slug: 'ChatterUI-Latest',
+        version: '0.9.0',
         orientation: 'default',
         icon: './assets/images/icon.png',
         scheme: 'chatterui',
@@ -18,8 +18,8 @@ module.exports = {
                 tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
-            package: IS_DEV ? 'com.Vali98.ChatterUIDev' : 'com.Vali98.ChatterUI',
-            bundleIdentifier: IS_DEV ? 'com.Vali98.ChatterUIDev' : 'com.Vali98.ChatterUI',
+            package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
+            bundleIdentifier: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
         },
         android: {
             adaptiveIcon: {
@@ -28,7 +28,7 @@ module.exports = {
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
-            package: IS_DEV ? 'com.Vali98.ChatterUIDev' : 'com.Vali98.ChatterUI',
+            package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
             userInterfaceStyle: 'dark',
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
