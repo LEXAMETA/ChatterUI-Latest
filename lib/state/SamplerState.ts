@@ -105,8 +105,9 @@ export namespace SamplersManager {
                 migrate: async (
                     _persistedState: SamplerStateProps | undefined,
                     _version: number
-                ) => {
+                ): Promise<unknown> => {
                     // No migrations yet
+                    return;
                 },
             }
         )
