@@ -90,16 +90,13 @@ module.exports = {
         ],
         experiments: {
             typedRoutes: true,
-        // Example after removing:
-extra: {
+            extra: {
     router: {
         origin: false,
     },
-    
     eas: {
-        // Keep 'eas: {}' empty if no other properties, or remove 'eas' if it's the only one.
+        projectId: 97c3263e-6c06-4869-8669-a571aaa37c5b,
             },
         },
     },
 }
-
