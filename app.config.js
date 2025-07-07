@@ -4,7 +4,7 @@ module.exports = {
     expo: {
         name: IS_DEV ? 'ChatterUI-Latest (DEV)' : 'ChatterUI-Latest',
         newArchEnabled: true,
-        slug: 'ChatterUI-Latest',
+        slug: 'chatterui-latest',
         version: '0.1.0',
         orientation: 'default',
         icon: './assets/images/icon.png',
