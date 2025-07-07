@@ -95,6 +95,7 @@ extra: {
     router: {
         origin: false,
     },
+    
     eas: {
         // Keep 'eas: {}' empty if no other properties, or remove 'eas' if it's the only one.
             },
