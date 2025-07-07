@@ -224,14 +224,15 @@ const buildFields = (config: APIConfiguration, values: APIValues) => {
 
     // Context Length
     const contextLengthObject = config.request.samplerFields.find(
-        (item) => item.samplerID === SamplerID.CONTEXT_LENGTH
-    );
+    (item) => item.samplerID === SamplerID.CONTEXT_LENGTH
+);
 
-    const instructLengthField =
-        contextLengthObject && payloadFields?.[contextLengthObject.externalName];
+if (contextLengthObject) {
+    const instructLengthField = payloadFields?.[contextLengthObject.externalName];
     if (instructLengthField !== undefined) {
-        delete payloadFields?.[contextLengthObject.externalName];
+        delete payloadFields[contextLengthObject.externalName];
     }
+}
 
     const modelLengthField = getModelContextLength(config, values);
     const instructLength =
