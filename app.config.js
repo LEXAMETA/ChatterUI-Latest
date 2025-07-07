@@ -1,4 +1,4 @@
-const IS_DEV = process.env.APP_VARIANT === 'development'
+const IS_DEV = process.env.APP_VARIANT === 'development';
 
 module.exports = {
     expo: {
@@ -24,7 +24,7 @@ module.exports = {
         android: {
             adaptiveIcon: {
                 foregroundImage: './assets/images/adaptive-icon-foreground.png',
-                backgroundImage: './assets/images//adaptive-icon-background.png',
+                backgroundImage: './assets/images/adaptive-icon-background.png',
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
@@ -45,7 +45,10 @@ module.exports = {
             [
                 'expo-asset',
                 {
-                    assets: ['./assets/models/aibot.png', './assets/models/llama3tokenizer.gguf'],
+                    assets: [
+                        './assets/models/aibot.png',
+                        './assets/models/llama3tokenizer.gguf',
+                    ],
                 },
             ],
             [
@@ -88,8 +91,9 @@ module.exports = {
             './expo-build-plugins/copyjni.plugin.js',
             './expo-build-plugins/usercert.plugin.js',
         ],
-            experiments: {
-        typedRoutes: true,
+        experiments: {
+            typedRoutes: true,
+        },
         extra: {
             router: {
                 origin: false,
