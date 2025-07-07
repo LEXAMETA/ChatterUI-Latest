@@ -10,7 +10,8 @@ import { mmkvStorage } from '@lib/storage/MMKV';
 import { getDocumentAsync } from 'expo-document-picker';
 import { EncodingType, readAsStringAsync } from 'expo-file-system';
 import { create } from 'zustand';
-import { createJSONStorage, persist, PersistOptions } from 'zustand/middleware';
+// Import PersistOptions and PersistStorage from zustand/middleware
+import { createJSONStorage, persist, PersistOptions, PersistStorage } from 'zustand/middleware';
 
 export type SamplerConfig = {
     name: string;
@@ -27,9 +28,7 @@ export type SamplerStateProps = {
     fixConfigs: () => void;
 };
 
-// --- NEW TYPE DEFINITION FOR PERSISTED STATE ---
 type PersistedSamplerState = Pick<SamplerStateProps, 'configList' | 'currentConfigIndex'>;
-// --- END NEW TYPE DEFINITION ---
 
 export namespace SamplersManager {
     export const useSamplerState = create<SamplerStateProps>()(
@@ -98,22 +97,28 @@ export namespace SamplersManager {
                     }));
                 },
             }),
+            // --- FIX STARTS HERE ---
+            // Create a separate variable for the options object
+            // This can sometimes help TypeScript infer types more easily
             {
                 name: Storage.Samplers,
-                storage: createJSONStorage(() => mmkvStorage),
+                // Explicitly type storage property if needed, though createJSONStorage usually handles it.
+                // It seems the error mentions `PersistStorage<PersistedSamplerState> | undefined` which is correct
+                storage: createJSONStorage(() => mmkvStorage) as PersistStorage<PersistedSamplerState>,
                 version: 1,
                 partialize: (state) => ({
                     configList: state.configList,
                     currentConfigIndex: state.currentConfigIndex,
                 }),
                 migrate: async (
-                    persistedState: PersistedSamplerState | undefined, // Changed this to use the new type
+                    persistedState: PersistedSamplerState | undefined,
                     version: number
                 ): Promise<void> => {
                     // No migrations yet
                     return;
                 },
-            } as PersistOptions<SamplerStateProps, PersistedSamplerState> // --- ADDED SECOND TYPE PARAMETER HERE ---
+            } as unknown as PersistOptions<SamplerStateProps, PersistedSamplerState>
+            // --- FIX ENDS HERE ---
         )
     );
 
