@@ -10,7 +10,6 @@ import { mmkvStorage } from '@lib/storage/MMKV';
 import { getDocumentAsync } from 'expo-document-picker';
 import { EncodingType, readAsStringAsync } from 'expo-file-system';
 import { create } from 'zustand';
-// Import PersistOptions and PersistStorage from zustand/middleware
 import { createJSONStorage, persist, PersistOptions, PersistStorage } from 'zustand/middleware';
 
 export type SamplerConfig = {
@@ -97,28 +96,31 @@ export namespace SamplersManager {
                     }));
                 },
             }),
-            // --- FIX STARTS HERE ---
-            // Create a separate variable for the options object
-            // This can sometimes help TypeScript infer types more easily
             {
                 name: Storage.Samplers,
-                // Explicitly type storage property if needed, though createJSONStorage usually handles it.
-                // It seems the error mentions `PersistStorage<PersistedSamplerState> | undefined` which is correct
                 storage: createJSONStorage(() => mmkvStorage) as PersistStorage<PersistedSamplerState>,
                 version: 1,
                 partialize: (state) => ({
                     configList: state.configList,
                     currentConfigIndex: state.currentConfigIndex,
                 }),
+                // --- FIX STARTS HERE ---
+                // Type `persistedState` as `unknown` to satisfy the strict `noImplicitAny` rule
+                // and the internal typing of Zustand's `persist` middleware.
                 migrate: async (
-                    persistedState: PersistedSamplerState | undefined,
+                    persistedState: unknown, // Changed from PersistedSamplerState | undefined to unknown
                     version: number
                 ): Promise<void> => {
-                    // No migrations yet
+                    // If you *were* going to use persistedState, you'd then need to
+                    // perform runtime checks and type assertions on it, e.g.:
+                    // if (persistedState && typeof persistedState === 'object' && 'configList' in persistedState) {
+                    //     const oldState = persistedState as PersistedSamplerState;
+                    //     // ... perform migration logic ...
+                    // }
                     return;
                 },
+                // --- FIX ENDS HERE ---
             } as unknown as PersistOptions<SamplerStateProps, PersistedSamplerState>
-            // --- FIX ENDS HERE ---
         )
     );
 
