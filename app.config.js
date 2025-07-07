@@ -15,7 +15,7 @@ module.exports = {
             icon: {
                 dark: './assets/images/ios-dark.png',
                 light: './assets/images/ios-light.png',
-                tinted: './assets/images/icon.png',.
+                tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
             package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
