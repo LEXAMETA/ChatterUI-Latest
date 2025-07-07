@@ -10,7 +10,7 @@ import { mmkvStorage } from '@lib/storage/MMKV';
 import { getDocumentAsync } from 'expo-document-picker';
 import { EncodingType, readAsStringAsync } from 'expo-file-system';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { createJSONStorage, persist, PersistOptions } from 'zustand/middleware';
 
 export type SamplerConfig = {
     name: string;
@@ -103,13 +103,13 @@ export namespace SamplersManager {
                     currentConfigIndex: state.currentConfigIndex,
                 }),
                 migrate: async (
-                    _persistedState: SamplerStateProps | undefined,
-                    _version: number
-                ): Promise<unknown> => {
+                    persistedState: SamplerStateProps | undefined,
+                    version: number
+                ): Promise<void> => {
                     // No migrations yet
                     return;
                 },
-            }
+            } as PersistOptions<SamplerStateProps>
         )
     );
 
