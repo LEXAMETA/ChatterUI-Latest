@@ -94,6 +94,7 @@ module.exports = {
         experiments: {
             typedRoutes: true,
         },
+        
         extra: {
             router: {
                 origin: false,
