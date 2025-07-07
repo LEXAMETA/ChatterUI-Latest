@@ -88,14 +88,14 @@ module.exports = {
             './expo-build-plugins/copyjni.plugin.js',
             './expo-build-plugins/usercert.plugin.js',
         ],
-        experiments: {
-            typedRoutes: true,
-            extra: {
-    router: {
-        origin: false,
-    },
-    eas: {
-        projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
+            experiments: {
+        typedRoutes: true,
+        extra: {
+            router: {
+                origin: false,
+            },
+            eas: {
+                projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
             },
         },
     },
