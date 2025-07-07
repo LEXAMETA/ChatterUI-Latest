@@ -100,26 +100,19 @@ export namespace SamplersManager {
                 name: Storage.Samplers,
                 storage: createJSONStorage(() => mmkvStorage) as PersistStorage<PersistedSamplerState>,
                 version: 1,
-                partialize: (state) => ({
+                // --- FIX STARTS HERE ---
+                // Explicitly type the 'state' parameter of the partialize function
+                partialize: (state: SamplerStateProps) => ({
                     configList: state.configList,
                     currentConfigIndex: state.currentConfigIndex,
                 }),
-                // --- FIX STARTS HERE ---
-                // Type `persistedState` as `unknown` to satisfy the strict `noImplicitAny` rule
-                // and the internal typing of Zustand's `persist` middleware.
+                // --- FIX ENDS HERE ---
                 migrate: async (
-                    persistedState: unknown, // Changed from PersistedSamplerState | undefined to unknown
+                    persistedState: unknown,
                     version: number
                 ): Promise<void> => {
-                    // If you *were* going to use persistedState, you'd then need to
-                    // perform runtime checks and type assertions on it, e.g.:
-                    // if (persistedState && typeof persistedState === 'object' && 'configList' in persistedState) {
-                    //     const oldState = persistedState as PersistedSamplerState;
-                    //     // ... perform migration logic ...
-                    // }
                     return;
                 },
-                // --- FIX ENDS HERE ---
             } as unknown as PersistOptions<SamplerStateProps, PersistedSamplerState>
         )
     );
