@@ -306,8 +306,8 @@ const getSamplerFields = (config: APIConfiguration, values: APIValues) => {
         const samplerItem = Samplers[item.samplerID];
         let cleanvalue = value;
         if (typeof value === 'number') {
-            if (item.samplerID === SamplerID.MAX_LENGTH && max_length) {
-                cleanvalue = Math.min(value, max_length);
+            if (item.samplerID === SamplerID.CONTEXT_LENGTH && max_length) {
+    cleanvalue = Math.min(value, max_length);
             } else if (samplerItem.values.type === 'integer') {
                 cleanvalue = Math.floor(value);
             }
