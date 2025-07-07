@@ -1,14 +1,14 @@
-const IS_DEV = process.env.APP_VARIANT === 'development';
+const IS_DEV = process.env.APP_VARIANT === 'development'
 
 module.exports = {
     expo: {
         name: IS_DEV ? 'ChatterUI-Latest (DEV)' : 'ChatterUI-Latest',
         newArchEnabled: true,
         slug: 'ChatterUI-Latest',
-        version: '0.9.0',
+        version: '0.1.0',
         orientation: 'default',
         icon: './assets/images/icon.png',
-        scheme: 'chatterui',
+        scheme: 'chattcp-test',
         userInterfaceStyle: 'automatic',
         assetBundlePatterns: ['**/*'],
         ios: {
@@ -18,8 +18,8 @@ module.exports = {
                 tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
-            package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
-            bundleIdentifier: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
+            package: IS_DEV ? 'com.LEXAmeta.ChatTCPDev.test' : 'com.LEXAmeta.ChatTCP.test',
+            bundleIdentifier: IS_DEV ? 'com.LEXAmeta.ChatTCPDev.test' : 'com.LEXAmeta.ChatTCP.test',
         },
         android: {
             adaptiveIcon: {
@@ -28,7 +28,7 @@ module.exports = {
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
-            package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
+            package: IS_DEV ? 'com.LEXAmeta.ChatTCPDev.test' : 'com.LEXAmeta.ChatTCP.test',
             userInterfaceStyle: 'dark',
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
@@ -45,10 +45,7 @@ module.exports = {
             [
                 'expo-asset',
                 {
-                    assets: [
-                        './assets/models/aibot.png',
-                        './assets/models/llama3tokenizer.gguf',
-                    ],
+                    assets: ['./assets/models/aibot.png', './assets/models/llama3tokenizer.gguf'],
                 },
             ],
             [
@@ -94,7 +91,7 @@ module.exports = {
         experiments: {
             typedRoutes: true,
         },
-        
+        // --- The 'extra' block HAS BEEN MOVED HERE ---
         extra: {
             router: {
                 origin: false,
@@ -102,6 +99,6 @@ module.exports = {
             eas: {
                 projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
             },
-        }
-    },
-};
+        } // No comma here, as 'extra' is the last property of 'expo'
+    }, // This closes the 'expo' object
+}; // This closes the 'module.exports' object
