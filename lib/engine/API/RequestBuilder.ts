@@ -223,24 +223,28 @@ const buildFields = (config: APIConfiguration, values: APIValues) => {
     }
 
     // Context Length
-    const contextLengthObject = config.request.samplerFields.find(
+const contextLengthObject = config.request.samplerFields.find(
     (item) => item.samplerID === SamplerID.CONTEXT_LENGTH
 );
 
+// Declare instructLengthField here, outside the 'if' block
+let instructLengthField: any = undefined; // Use 'any' for now for flexibility, or 'number | undefined' if you're strict
+
 if (contextLengthObject) {
-    const instructLengthField = payloadFields?.[contextLengthObject.externalName];
+    // Assign the value (remove 'const' here)
+    instructLengthField = payloadFields?.[contextLengthObject.externalName];
     if (instructLengthField !== undefined) {
         delete payloadFields[contextLengthObject.externalName];
     }
 }
 
-    const modelLengthField = getModelContextLength(config, values);
-    const instructLength =
-        typeof instructLengthField === 'number' ? instructLengthField : modelLengthField ?? 0;
-    const modelLength = modelLengthField ?? instructLength;
-    const length = config.model.useModelContextLength
-        ? Math.min(modelLength, instructLength)
-        : instructLength;
+const modelLengthField = getModelContextLength(config, values);
+const instructLength =
+    typeof instructLengthField === 'number' ? instructLengthField : modelLengthField ?? 0;
+const modelLength = modelLengthField ?? instructLength;
+const length = config.model.useModelContextLength
+    ? Math.min(modelLength, instructLength)
+    : instructLength;
 
     // Prompt
     const prompt = {
