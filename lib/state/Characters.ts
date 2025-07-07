@@ -926,4 +926,3 @@ export const replaceMacros = (text: string) => {
     for (const rule of rules) newtext = newtext.replaceAll(rule.macro, rule.value)
     return newtext
 }
-

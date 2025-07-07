@@ -88,4 +88,3 @@ export const readableFileSize = (size: number) => {
         return `${sizeInGB.toFixed(2)} GB`
     }
 }
-

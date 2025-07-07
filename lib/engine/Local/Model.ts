@@ -288,4 +288,3 @@ export namespace KV {
         Logger.info(`Size of KV cache: ${Math.floor(data.size * 0.000001)} MB`)
     }
 }
-

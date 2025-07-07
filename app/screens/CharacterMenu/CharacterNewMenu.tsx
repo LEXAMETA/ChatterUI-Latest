@@ -90,4 +90,3 @@ const CharacterNewMenu: React.FC<CharacterNewMenuProps> = ({ nowLoading, setNowL
 }
 
 export default CharacterNewMenu
-

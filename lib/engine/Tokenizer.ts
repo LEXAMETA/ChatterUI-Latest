@@ -76,4 +76,3 @@ export namespace Tokenizer {
 }
 
 Tokenizer.useDefaultTokenizer.getState().loadModel()
-

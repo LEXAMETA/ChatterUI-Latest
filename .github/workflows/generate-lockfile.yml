@@ -1,40 +1,40 @@
 name: Generate package-lock.json
 on:
-  workflow_dispatch:
+    workflow_dispatch:
 permissions:
-  contents: write
+    contents: write
 jobs:
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-          cache: 'npm'
-      - name: Clear npm cache
-        run: npm cache clean --force
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-      - name: Commit package-lock.json if changed
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.github.com"  # Corrected email for GitHub Actions bot
-          git add package-lock.json
+    generate:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+            - uses: actions/setup-node@v3
+              with:
+                  node-version: '18'
+                  cache: 'npm'
+            - name: Clear npm cache
+              run: npm cache clean --force
+            - name: Install dependencies
+              run: npm install --legacy-peer-deps
+            - name: Commit package-lock.json if changed
+              run: |
+                  git config user.name "GitHub Actions"
+                  git config user.email "actions@github.github.com"  # Corrected email for GitHub Actions bot
+                  git add package-lock.json
 
-          # Check if there are any staged changes to package-lock.json
-          if ! git diff-index --quiet HEAD -- package-lock.json; then
-            echo "Changes detected in package-lock.json. Committing..."
-            git commit -m "Regenerate package-lock.json"
-            git push
-          else
-            echo "No changes to package-lock.json, skipping commit."
-          fi
-      - name: Upload npm log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-log
-          path: /home/runner/.npm/_logs/*.log
+                  # Check if there are any staged changes to package-lock.json
+                  if ! git diff-index --quiet HEAD -- package-lock.json; then
+                    echo "Changes detected in package-lock.json. Committing..."
+                    git commit -m "Regenerate package-lock.json"
+                    git push
+                  else
+                    echo "No changes to package-lock.json, skipping commit."
+                  fi
+            - name: Upload npm log
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: npm-log
+                  path: /home/runner/.npm/_logs/*.log

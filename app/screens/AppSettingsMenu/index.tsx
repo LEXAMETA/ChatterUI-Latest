@@ -40,4 +40,3 @@ const AppSettingsMenu = () => {
 }
 
 export default AppSettingsMenu
-
