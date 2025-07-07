@@ -27,6 +27,10 @@ export type SamplerStateProps = {
     fixConfigs: () => void;
 };
 
+// --- NEW TYPE DEFINITION FOR PERSISTED STATE ---
+type PersistedSamplerState = Pick<SamplerStateProps, 'configList' | 'currentConfigIndex'>;
+// --- END NEW TYPE DEFINITION ---
+
 export namespace SamplersManager {
     export const useSamplerState = create<SamplerStateProps>()(
         persist(
@@ -103,13 +107,13 @@ export namespace SamplersManager {
                     currentConfigIndex: state.currentConfigIndex,
                 }),
                 migrate: async (
-                    persistedState: SamplerStateProps | undefined,
+                    persistedState: PersistedSamplerState | undefined, // Changed this to use the new type
                     version: number
                 ): Promise<void> => {
                     // No migrations yet
                     return;
                 },
-            } as PersistOptions<SamplerStateProps>
+            } as PersistOptions<SamplerStateProps, PersistedSamplerState> // --- ADDED SECOND TYPE PARAMETER HERE ---
         )
     );
 
