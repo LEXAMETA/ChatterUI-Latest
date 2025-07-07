@@ -18,8 +18,8 @@ module.exports = {
                 tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
-            package: IS_DEV ? 'com.LEXAmeta.ChatTCPDev.test' : 'com.LEXAmeta.ChatTCP.test',
-            bundleIdentifier: IS_DEV ? 'com.LEXAmeta.ChatTCPDev.test' : 'com.LEXAmeta.ChatTCP.test',
+            package: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
+            bundleIdentifier: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
         },
         android: {
             adaptiveIcon: {
@@ -28,7 +28,7 @@ module.exports = {
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
-            package: IS_DEV ? 'com.LEXAmeta.ChatTCPDev.test' : 'com.LEXAmeta.ChatTCP.test',
+            package: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
             userInterfaceStyle: 'dark',
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
