@@ -9,7 +9,6 @@ module.exports = {
             },
         },
     ],
-
     plugins: ['prettier', 'eslint-plugin-react-compiler', 'internal'],
     rules: {
         'internal/enforce-spacing-values': 'error',
@@ -26,4 +25,4 @@ module.exports = {
         '@typescript-eslint/no-unused-vars': 'off',
         'object-shorthand': ['warn', 'consistent'],
     },
-}
+};
