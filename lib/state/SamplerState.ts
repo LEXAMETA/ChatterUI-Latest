@@ -65,6 +65,7 @@ export namespace SamplersManager {
                 setConfig: (index) => {
                     const maxLength = get().configList.length;
                     if (index >= maxLength || index < 0) {
+                        Logger.warn(`Attempted to set config index out of bounds: ${index}`);
                         return;
                     }
                     set((state) => ({
@@ -101,7 +102,10 @@ export namespace SamplersManager {
                     configList: state.configList,
                     currentConfigIndex: state.currentConfigIndex,
                 }),
-                migrate: async (_persistedState: any, _version) => {
+                migrate: async (
+                    _persistedState: SamplerStateProps | undefined,
+                    _version: number
+                ) => {
                     // No migrations yet
                 },
             }
@@ -111,23 +115,21 @@ export namespace SamplersManager {
     export const useSamplers = () => {
         const {
             currentConfigIndex,
-            samplerConfigs,
+            configList,
             addSamplerConfig,
             deleteSamplerConfig,
-            changeConfig,
+            setConfig: changeConfig,
             updateCurrentConfig,
-            configList,
         } = useSamplerState((state) => ({
             currentConfigIndex: state.currentConfigIndex,
-            samplerConfigs: state.configList,
+            configList: state.configList,
             addSamplerConfig: state.addSamplerConfig,
             deleteSamplerConfig: state.deleteSamplerConfig,
-            changeConfig: state.setConfig,
+            setConfig: state.setConfig,
             updateCurrentConfig: state.updateCurrentConfig,
-            configList: state.configList,
         }));
 
-        const currentConfig = samplerConfigs[currentConfigIndex];
+        const currentConfig = configList[currentConfigIndex];
 
         return {
             currentConfigIndex,
@@ -150,42 +152,60 @@ export namespace SamplersManager {
             const result = await getDocumentAsync({ type: ['application/*'] });
             if (
                 result.canceled ||
-                (!result.assets ||
-                    !result.assets[0] ||
-                    (!result.assets[0].name.endsWith('json') &&
-                        !result.assets[0].name.endsWith('settings')))
+                !result.assets ||
+                !result.assets[0] ||
+                (!result.assets[0].name.endsWith('.json') &&
+                    !result.assets[0].name.endsWith('.settings'))
             ) {
-                Logger.errorToast(`Invalid File Type!`);
+                Logger.errorToast(`Invalid File Type! Please select a .json or .settings file.`);
                 return;
             }
             const name = result.assets[0].name
                 .replace('.json', '')
                 .replace('.settings', '')
                 .replace(/ /g, '_');
-            const data = await readAsStringAsync(result.assets[0].uri, {
+            const dataStr = await readAsStringAsync(result.assets[0].uri, {
                 encoding: EncodingType.UTF8,
             });
-            return { data: JSON.parse(data), name };
+            const data = JSON.parse(dataStr);
+            return { data, name };
         } catch (e) {
-            Logger.errorToast(`Failed to import: ${e}`);
+            Logger.errorToast(`Failed to import configuration: ${e instanceof Error ? e.message : e}`);
         }
     };
 }
 
-export const fixSamplerConfig = (config: SamplerConfigData) => {
+/**
+ * Ensures that the sampler config has all required keys with correct types.
+ * Specifically coerces SEED from string to number if needed.
+ * Adds missing keys with default values.
+ */
+export const fixSamplerConfig = (config: SamplerConfigData): SamplerConfigData => {
     const existingKeys = Object.keys(config);
     const defaultKeys = Object.values(SamplerID) as SamplerID[];
-    let samekeys = true;
+    let allKeysPresent = true;
+
     for (const key of defaultKeys) {
         if (key === SamplerID.SEED && typeof config[key] === 'string') {
-            config[key] = parseInt(config[key] as unknown as string, 10);
+            // Attempt to safely parse SEED if it's a string
+            const parsed = parseInt(config[key] as unknown as string, 10);
+            if (!isNaN(parsed)) {
+                config[key] = parsed;
+            } else {
+                Logger.warn(`Sampler Config SEED value "${config[key]}" could not be parsed to number.`);
+            }
         }
-        if (existingKeys.includes(key)) continue;
-        const data = Samplers[key].values.default;
-        config[key] = data;
-        samekeys = false;
-        Logger.debug(`Sampler Config was missing field: ${key}`);
+        if (!existingKeys.includes(key)) {
+            // Add missing key with default value
+            config[key] = Samplers[key].values.default;
+            allKeysPresent = false;
+            Logger.debug(`Sampler Config was missing field: ${key}, added default.`);
+        }
     }
-    if (!samekeys) Logger.warn(`Sampler Config had missing fields and was fixed!`);
+
+    if (!allKeysPresent) {
+        Logger.warn(`Sampler Config had missing fields and was fixed.`);
+    }
+
     return config;
 };
