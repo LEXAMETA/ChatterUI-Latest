@@ -4,11 +4,11 @@ module.exports = {
     expo: {
         name: IS_DEV ? 'ChatterUI-Latest (DEV)' : 'ChatterUI-Latest',
         newArchEnabled: true,
-        slug: 'ChatterUI-Latest',
-        version: '0.9.0',
+        slug: 'chatterui-latest',
+        version: '0.1.0',
         orientation: 'default',
         icon: './assets/images/icon.png',
-        scheme: 'chatterui',
+        scheme: 'chattcp-test',
         userInterfaceStyle: 'automatic',
         assetBundlePatterns: ['**/*'],
         ios: {
@@ -18,17 +18,17 @@ module.exports = {
                 tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
-            package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
-            bundleIdentifier: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
+            package: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
+            bundleIdentifier: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
         },
         android: {
             adaptiveIcon: {
                 foregroundImage: './assets/images/adaptive-icon-foreground.png',
-                backgroundImage: './assets/images//adaptive-icon-background.png',
+                backgroundImage: './assets/images/adaptive-icon-background.png',
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
-            package: IS_DEV ? 'com.ChatterUI-LatestDev' : 'com.ChatterUI-Latest',
+            package: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
             userInterfaceStyle: 'dark',
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
@@ -91,12 +91,12 @@ module.exports = {
         experiments: {
             typedRoutes: true,
             extra: {
-    router: {
-        origin: false,
-    },
-    eas: {
-        projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
+            router: {
+                origin: false,
             },
-        },
-    },
-}
+            eas: {
+                projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
+            },
+        } // No comma here, as 'extra' is the last property of 'expo'
+    }, // This closes the 'expo' object
+}; // This closes the 'module.exports' object
