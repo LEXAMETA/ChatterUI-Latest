@@ -27,11 +27,13 @@ type APIStateProps = {
 export namespace APIState {
     export const useAPIState = create<APIStateProps>()(
         persist(
+            // TO THIS: (Notice 'function' keyword for methods)
             (set, get) => ({
                 activeIndex: -1,
                 values: [],
                 customTemplates: [],
-                addValue: (value) => {
+                addValue: function (value) {
+                    // CHANGED
                     const values = [...get().values]
                     for (const item of values) {
                         item.active = false
@@ -39,12 +41,13 @@ export namespace APIState {
                     values.push(value)
                     set((state) => ({
                         ...state,
-                        values,
+                        values: values,
                         activeIndex: values.length - 1,
                     }))
                 },
 
-                addTemplate: (template) => {
+                addTemplate: function (template) {
+                    // CHANGED
                     const templates = get().getTemplates()
                     if (templates.some((item) => item.name === template.name)) {
                         const newName = generateUniqueName(
@@ -60,7 +63,8 @@ export namespace APIState {
                         customTemplates: [...state.customTemplates, output],
                     }))
                 },
-                removeValue: (index) => {
+                removeValue: function (index) {
+                    // CHANGED
                     const values = [...get().values]
                     let activeIndex = get().activeIndex
                     if (index === activeIndex) {
@@ -69,12 +73,14 @@ export namespace APIState {
                     values.splice(index, 1)
                     set((state) => ({ ...state, values, activeIndex }))
                 },
-                removeTemplate: (index) => {
+                removeTemplate: function (index) {
+                    // CHANGED
                     const templates = [...get().customTemplates]
                     templates.splice(index, 1)
                     set((state) => ({ ...state, customTemplates: templates }))
                 },
-                editValue: (newValue, index) => {
+                editValue: function (newValue, index) {
+                    // CHANGED
                     const values = [...get().values]
                     const oldValue = values[index]
                     values[index] = newValue
@@ -90,7 +96,8 @@ export namespace APIState {
                     }
                     set((state) => ({ ...state, values, ...active }))
                 },
-                getTemplates: () => {
+                getTemplates: function () {
+                    // CHANGED
                     return [...defaultTemplates, ...get().customTemplates]
                 },
             }),

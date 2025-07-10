@@ -1,5 +1,9 @@
 module.exports = {
     root: true,
+    env: {
+        // <--- Start of 'env' object
+        node: true,
+    }, // <--- YOU NEED THIS CLOSING BRACE!
     extends: ['universe/native', 'universe/shared/typescript-analysis'],
     overrides: [
         {
@@ -25,4 +29,4 @@ module.exports = {
         '@typescript-eslint/no-unused-vars': 'off',
         'object-shorthand': ['warn', 'consistent'],
     },
-};
+}

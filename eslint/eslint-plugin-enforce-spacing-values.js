@@ -1,4 +1,7 @@
-const allowedValues = [0, 2, 4, 8, 12, 16, 24]
+// eslint/eslint-plugin-enforce-spacing-values.js
+
+// REMOVE this line from the top of the file:
+// const allowedValues = [0, 2, 4, 8, 12, 16, 24]
 
 module.exports = {
     meta: {
@@ -10,10 +13,16 @@ module.exports = {
         },
         schema: [], // no options
         messages: {
-            invalidValue: `The value '{{value}}' for '{{property}}' is not allowed. Use ${allowedValues.toString()} instead.`,
+            // DIRECTLY EMBED THE VALUES here for the message string
+            invalidValue: `The value '{{value}}' for '{{property}}' is not allowed. Use 0, 2, 4, 8, 12, 16, 24 instead.`,
         },
     },
-    create(context) {
+    // Ensure 'create' is defined as a function, not a shorthand method
+    create: function (context) {
+        // RE-ADD allowedValues HERE, inside the 'create' function,
+        // because it's used for the rule's logic
+        const allowedValues = [0, 2, 4, 8, 12, 16, 24]
+
         const relevantProperties = [
             'margin',
             'marginTop',
@@ -33,15 +42,16 @@ module.exports = {
         ]
 
         return {
-            Property(node) {
+            // Ensure 'Property' is defined as a function, not a shorthand method
+            Property: function (node) {
                 if (relevantProperties.includes(node.key.name)) {
                     const value = node.value.value
                     if (typeof value === 'number' && !allowedValues.includes(value)) {
                         context.report({
-                            node,
+                            node: node, // Use explicit 'node: node'
                             messageId: 'invalidValue',
                             data: {
-                                value,
+                                value: value, // Use explicit 'value: value'
                                 property: node.key.name,
                             },
                         })
