@@ -91,15 +91,15 @@ module.exports = {
         experiments: {
             typedRoutes: true,
         },
-        // --- The 'extra' block HAS BEEN MOVED HERE ---
         extra: {
             router: {
                 origin: false,
             },
             eas: {
-                // THIS IS WHERE YOU ADD THE projectId LINE
                 projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
             },
-        }, // No comma here, as 'extra' is the last property of 'expo'
-    }, // This closes the 'expo' object
-} // This closes the 'module.exports' object
+            // --- ADD THIS NEW LINE ---
+            EXPO_PUBLIC_BUILD_TARGET: process.env.EXPO_PUBLIC_BUILD_TARGET || 'native',
+        },
+    },
+}
