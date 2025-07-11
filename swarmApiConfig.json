@@ -1,54 +1,54 @@
 {
-  "version": 1,
-  "name": "Swarm TCP AI",
-  "defaultValues": {
-    "endpoint": "http://localhost:8080",
-    "modelEndpoint": "",
-    "key": "",
-    "model": "qwen3"
-  },
-  "features": {
-    "usePrefill": false,
-    "useFirstMessage": false,
-    "useKey": false,
-    "useModel": true,
-    "multipleModels": false
-  },
-  "request": {
-    "requestType": "stream",
-    "samplerFields": [
-      { "externalName": "type", "samplerID": "prompt_type" },
-      { "externalName": "model", "samplerID": "model_name" },
-      { "externalName": "lora", "samplerID": "lora_id" }
-    ],
-    "useStop": false,
-    "stopKey": "",
-    "promptKey": "prompt",
-    "completionType": {
-      "type": "chatCompletions",
-      "userRole": "user",
-      "systemRole": "system",
-      "assistantRole": "assistant",
-      "contentName": "content"
+    "version": 1,
+    "name": "Swarm TCP AI",
+    "defaultValues": {
+        "endpoint": "http://localhost:8080",
+        "modelEndpoint": "",
+        "key": "",
+        "model": "qwen3"
     },
-    "authHeader": "",
-    "authPrefix": "",
-    "removeLength": true,
-    "removeSeedifNegative": true
-  },
-  "payload": {
-    "type": "custom",
-    "customPayload": "{\"type\": \"{{prompt_type}}\", \"model\": \"{{model_name}}\", \"prompt\": \"{{prompt}}\", \"lora\": \"{{lora_id}}\"}"
-  },
-  "model": {
-    "useModelContextLength": false,
-    "nameParser": "",
-    "contextSizeParser": "",
-    "modelListParser": ""
-  },
-  "ui": {
-    "editableCompletionPath": false,
-    "editableModelPath": false,
-    "selectableModel": false
-  }
+    "features": {
+        "usePrefill": false,
+        "useFirstMessage": false,
+        "useKey": false,
+        "useModel": true,
+        "multipleModels": false
+    },
+    "request": {
+        "requestType": "stream",
+        "samplerFields": [
+            { "externalName": "type", "samplerID": "prompt_type" },
+            { "externalName": "model", "samplerID": "model_name" },
+            { "externalName": "lora", "samplerID": "lora_id" }
+        ],
+        "useStop": false,
+        "stopKey": "",
+        "promptKey": "prompt",
+        "completionType": {
+            "type": "chatCompletions",
+            "userRole": "user",
+            "systemRole": "system",
+            "assistantRole": "assistant",
+            "contentName": "content"
+        },
+        "authHeader": "",
+        "authPrefix": "",
+        "removeLength": true,
+        "removeSeedifNegative": true
+    },
+    "payload": {
+        "type": "custom",
+        "customPayload": "{\"type\": \"{{prompt_type}}\", \"model\": \"{{model_name}}\", \"prompt\": \"{{prompt}}\", \"lora\": \"{{lora_id}}\"}"
+    },
+    "model": {
+        "useModelContextLength": false,
+        "nameParser": "",
+        "contextSizeParser": "",
+        "modelListParser": ""
+    },
+    "ui": {
+        "editableCompletionPath": false,
+        "editableModelPath": false,
+        "selectableModel": false
+    }
 }

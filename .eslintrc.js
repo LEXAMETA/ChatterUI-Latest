@@ -27,6 +27,6 @@ module.exports = {
         radix: 'off',
         'no-unused-vars': 'off',
         '@typescript-eslint/no-unused-vars': 'off',
-        'object-shorthand': ['warn', 'consistent'],
+        'object-shorthand': ['off'],
     },
 }
