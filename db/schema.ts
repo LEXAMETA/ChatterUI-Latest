@@ -1,3 +1,5 @@
+// db/schema.ts
+
 import { relations, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text, primaryKey } from 'drizzle-orm/sqlite-core'
 
@@ -264,7 +266,7 @@ export const characterLorebooksRelations = relations(characterLorebooks, ({ one 
 
 // export const characterGroupChats = sqliteTable('character_group_chats', {})
 
-// Model Data
+// Model Data (with added model_type field)
 
 export const model_data = sqliteTable('model_data', {
     id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
@@ -276,6 +278,10 @@ export const model_data = sqliteTable('model_data', {
     quantization: text('quantization').notNull(),
     context_length: integer('context_length').notNull(),
     architecture: text('architecture').notNull(),
+    // NEW FIELD: model_type
+    model_type: text('model_type', { enum: ['main_chat', 'rag_embedding', 'rag_reasoning'] })
+        .notNull()
+        .default('main_chat'), // Default to 'main_chat' for existing models
     create_date: integer('create_date', { mode: 'number' })
         .$defaultFn(() => Date.now())
         .notNull(),
