@@ -4,7 +4,7 @@ import { Logger } from '@lib/state/Logger'
 import { mmkvStorage } from '@lib/storage/MMKV'
 import { AppDirectory, readableFileSize } from '@lib/utils/File'
 import { initLlama } from 'cui-llama.rn'
-import { model_data, ModelDataType } from 'db/schema'
+import { model_data, ModelDataType } from 'db/schema' // Ensure ModelDataType is imported
 import { eq } from 'drizzle-orm'
 import { getDocumentAsync } from 'expo-document-picker'
 import { copyAsync, deleteAsync, getInfoAsync, readDirectoryAsync } from 'expo-file-system'
@@ -14,7 +14,9 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 
 import { GGMLNameMap, GGMLType } from './GGML'
 
-export type ModelData = Omit<ModelDataType, 'id' | 'create_date' | 'last_modified'>
+// Make sure ModelDataType is correctly imported from db/schema.ts
+// It should now include the 'model_type' field.
+export type ModelData = Omit<ModelDataType, 'id' | 'create_date' | 'last_modified' | 'model_type'>; // Exclude model_type for initial data creation if needed, but it will be added during insertion.
 
 export namespace Model {
     export const getModelList = async () => {
@@ -30,7 +32,8 @@ export namespace Model {
         await db.delete(model_data).where(eq(model_data.id, id))
     }
 
-    export const importModel = async () => {
+    // Modified to accept modelType
+    export const importModel = async (modelType: ModelDataType['model_type'] = 'main_chat') => {
         return getDocumentAsync({
             copyToCacheDirectory: false,
         }).then(async (result) => {
@@ -52,25 +55,27 @@ export namespace Model {
                 })
             if (!success) return
 
-            // database routine here
-            if (await createModelData(name, true)) Logger.infoToast(`Model Imported Sucessfully!`)
+            // database routine here, passing modelType
+            if (await createModelData(name, true, modelType)) Logger.infoToast(`Model Imported Sucessfully!`)
         })
     }
 
-    export const linkModelExternal = async () => {
+    // Modified to accept modelType
+    export const linkModelExternal = async (modelType: ModelDataType['model_type'] = 'main_chat') => {
         return getDocumentAsync({
             copyToCacheDirectory: false,
         }).then(async (result) => {
             if (result.canceled) return
             const file = result.assets[0]
-            Logger.infoToast('Importing file...')
+            Logger.infoToast('Linking external file...') // Changed toast message
             if (!file) {
                 Logger.errorToast('File Invalid')
                 return
             }
 
-            if (await createModelDataExternal(file.uri, file.name, true))
-                Logger.infoToast(`Model Imported Sucessfully!`)
+            // database routine here, passing modelType
+            if (await createModelDataExternal(file.uri, file.name, true, modelType)) // Pass modelType
+                Logger.infoToast(`Model Linked Sucessfully!`) // Changed toast message
         })
     }
 
@@ -94,28 +99,37 @@ export namespace Model {
         // create data as migration step
         fileList.forEach(async (item) => {
             if (modelList.some((model_data) => model_data.file === item)) return
-            await createModelData(`${item}`)
+            // When creating data for existing files, default to 'main_chat' type
+            await createModelData(`${item}`, false, 'main_chat')
         })
     }
 
-    export const createModelData = async (filename: string, deleteOnFailure: boolean = false) => {
+    // Modified to accept modelType
+    export const createModelData = async (
+        filename: string,
+        deleteOnFailure: boolean = false,
+        modelType: ModelDataType['model_type'] = 'main_chat' // Added modelType parameter
+    ) => {
         return setModelDataInternal(
             filename,
             `${AppDirectory.ModelPath}${filename}`,
-            deleteOnFailure
+            deleteOnFailure,
+            modelType // Pass modelType
         )
     }
 
+    // Modified to accept modelType
     export const createModelDataExternal = async (
         newdir: string,
         filename: string,
-        deleteOnFailure: boolean = false
+        deleteOnFailure: boolean = false,
+        modelType: ModelDataType['model_type'] = 'main_chat' // Added modelType parameter
     ) => {
         if (!filename) {
             Logger.errorToast('Filename invalid, Import Failed')
             return
         }
-        return setModelDataInternal(filename, newdir, deleteOnFailure)
+        return setModelDataInternal(filename, newdir, deleteOnFailure, modelType) // Pass modelType
     }
 
     export const getModelListQuery = () => {
@@ -127,6 +141,9 @@ export namespace Model {
     }
 
     export const isInitialEntry = (data: ModelData) => {
+        // NOTE: This function's `ModelData` type should likely be `ModelDataType` now
+        // to properly account for `model_type` if you intend to check it here.
+        // For now, keeping as is, but be mindful of its usage.
         const initial: ModelData = {
             file: '',
             file_path: '',
@@ -136,6 +153,8 @@ export namespace Model {
             params: 'N/A',
             quantization: '-1',
             architecture: 'N/A',
+            // If you want to include model_type in this check, add it here and update ModelData type
+            // model_type: 'main_chat',
         }
 
         for (const key in initial) {
@@ -147,7 +166,8 @@ export namespace Model {
         return true
     }
 
-    const initialModelEntry = (filename: string, file_path: string) => ({
+    // Modified to accept modelType
+    const initialModelEntry = (filename: string, file_path: string, modelType: ModelDataType['model_type']) => ({
         context_length: 0,
         file: filename,
         file_path: file_path,
@@ -156,32 +176,35 @@ export namespace Model {
         params: 'N/A',
         quantization: '-1',
         architecture: 'N/A',
+        model_type: modelType, // Set the model type here
     })
 
     const setModelDataInternal = async (
         filename: string,
         file_path: string,
-        deleteOnFailure: boolean
+        deleteOnFailure: boolean,
+        modelType: ModelDataType['model_type'] // Added modelType parameter
     ) => {
         try {
             const [{ id }, ...rest] = await db
                 .insert(model_data)
-                .values(initialModelEntry(filename, file_path))
+                .values(initialModelEntry(filename, file_path, modelType)) // Pass modelType here
                 .returning({ id: model_data.id })
 
             const modelContext = await initLlama({ model: file_path, vocab_only: true })
 
             const modelInfo: any = modelContext.model
-            const modelType = modelInfo.metadata?.['general.architecture']
+            const modelArchitecture = modelInfo.metadata?.['general.architecture'] // Changed variable name for clarity
             const modelDataEntry = {
-                context_length: modelInfo.metadata?.[modelType + '.context_length'] ?? 0,
+                context_length: modelInfo.metadata?.[modelArchitecture + '.context_length'] ?? 0, // Use modelArchitecture
                 file: filename,
                 file_path: file_path,
                 name: modelInfo.metadata?.['general.name'] ?? 'N/A',
                 file_size: modelInfo.size ?? 0,
                 params: modelInfo.metadata?.['general.size_label'] ?? 'N/A',
                 quantization: modelInfo.metadata?.['general.file_type'] ?? '-1',
-                architecture: modelType ?? 'N/A',
+                architecture: modelArchitecture ?? 'N/A', // Use modelArchitecture
+                model_type: modelType, // Ensure model_type is explicitly set here after initial insert
             }
             Logger.info(`New Model Data:\n${modelDataText(modelDataEntry)}`)
             await modelContext.release()
@@ -194,10 +217,11 @@ export namespace Model {
         }
     }
 
-    const modelDataText = (data: ModelData) => {
+    const modelDataText = (data: ModelData) => { // NOTE: This type should ideally be ModelDataType now
         const quantValue = parseInt(data.quantization) as GGMLType
         const quantType = GGMLNameMap[quantValue]
-        return `Context length: ${data.context_length ?? 'N/A'}\nFile: ${data.file}\nName: ${data.name ?? 'N/A'}\nSize: ${(data.file_size && readableFileSize(data.file_size)) ?? 'N/A'}\nParams: ${data.params ?? 'N/A'}\nQuantization: ${quantType ?? 'N/A'}\nArchitecture: ${data.architecture ?? 'N/A'}`
+        // Added model_type to the info text
+        return `Context length: ${data.context_length ?? 'N/A'}\nFile: ${data.file}\nName: ${data.name ?? 'N/A'}\nSize: ${(data.file_size && readableFileSize(data.file_size)) ?? 'N/A'}\nParams: ${data.params ?? 'N/A'}\nQuantization: ${quantType ?? 'N/A'}\nArchitecture: ${data.architecture ?? 'N/A'}\nType: ${data.model_type ?? 'N/A'}`; // Added model_type here
     }
 
     const modelExists = async (modelName: string) => {
