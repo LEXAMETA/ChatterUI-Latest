@@ -1,3 +1,5 @@
+// lib/engine/Local/LlamaLocal.ts
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ContextParams, LlamaContext, initLlama, CompletionParams } from 'cui-llama.rn';
@@ -37,9 +39,9 @@ const defaultConfig: ContextParams = {
   batch: 512,
 };
 
-// MMKV keys for persistent LoRA URIs
-const SELECTED_EMBEDDING_LORA_URI_KEY = 'selectedEmbeddingLoRAUri';
-const SELECTED_REASONING_LORA_URI_KEY = 'selectedReasoningLoRAUri';
+// Removed: MMKV keys for persistent LoRA URIs - Zustand's partialize handles this now.
+// const SELECTED_EMBEDDING_LORA_URI_KEY = 'selectedEmbeddingLoRAUri';
+// const SELECTED_REASONING_LORA_URI_KEY = 'selectedReasoningLoRAUri';
 
 export type EngineDataProps = {
   config: ContextParams;
@@ -74,13 +76,12 @@ export const useEngineData = create<EngineDataProps>()(
       setEmbeddingModelId: (id) => set(() => ({ embeddingModelId: id })),
       setRagReasoningModelId: (id) => set(() => ({ ragReasoningModelId: id })),
 
+      // Removed mmkv.set calls - Zustand's persist middleware handles this automatically
       setSelectedEmbeddingLoRAUri: (uri) => {
         set({ selectedEmbeddingLoRAUri: uri });
-        mmkv.set(SELECTED_EMBEDDING_LORA_URI_KEY, uri ?? '');
       },
       setSelectedReasoningLoRAUri: (uri) => {
         set({ selectedReasoningLoRAUri: uri });
-        mmkv.set(SELECTED_REASONING_LORA_URI_KEY, uri ?? '');
       },
     }),
     {
@@ -90,17 +91,14 @@ export const useEngineData = create<EngineDataProps>()(
         lastModel: state.lastModel,
         embeddingModelId: state.embeddingModelId,
         ragReasoningModelId: state.ragReasoningModelId,
+        // These are included here, so Zustand's persist middleware will save/load them
         selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
         selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
       }),
       storage: createJSONStorage(() => mmkvStorage),
-      version: 2,
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          state.selectedEmbeddingLoRAUri = mmkv.getString(SELECTED_EMBEDDING_LORA_URI_KEY) || null;
-          state.selectedReasoningLoRAUri = mmkv.getString(SELECTED_REASONING_LORA_URI_KEY) || null;
-        }
-      },
+      version: 3, // Increment version as persistence logic for LoRA URIs has changed again
+      // Removed onRehydrateStorage for LoRA URIs - partialize and createJSONStorage handle it now.
+      // The previous onRehydrateStorage manually loaded from MMKV. Now, Zustand handles it.
     }
   )
 );
@@ -198,6 +196,7 @@ export async function getEmbeddingLlamaContext(loraPath: string | null = null): 
     embeddingLlamaContext = context;
     loadedEmbeddingModel = model;
     loadedEmbeddingLoRAPath = loraPath;
+    useEngineData.getState().setSelectedEmbeddingLoRAUri(loraPath); // Update Zustand state on successful load
   }
   return embeddingLlamaContext;
 }
@@ -225,6 +224,7 @@ export async function getRagReasoningLlamaContext(loraPath: string | null = null
     ragReasoningLlamaContext = context;
     loadedRagReasoningModel = model;
     loadedRagReasoningLoRAPath = loraPath;
+    useEngineData.getState().setSelectedReasoningLoRAUri(loraPath); // Update Zustand state on successful load
   }
   return ragReasoningLlamaContext;
 }
@@ -262,6 +262,8 @@ export async function unloadEmbeddingLlamaContext() {
     embeddingLlamaContext = null;
     loadedEmbeddingModel = null;
     loadedEmbeddingLoRAPath = null;
+    useEngineData.getState().setEmbeddingModelId(null); // Clear base model ID
+    useEngineData.getState().setSelectedEmbeddingLoRAUri(null); // Clear LoRA URI
     Logger.info('Embedding Llama context unloaded.');
   }
 }
@@ -272,6 +274,8 @@ export async function unloadRagReasoningLlamaContext() {
     ragReasoningLlamaContext = null;
     loadedRagReasoningModel = null;
     loadedRagReasoningLoRAPath = null;
+    useEngineData.getState().setRagReasoningModelId(null); // Clear base model ID
+    useEngineData.getState().setSelectedReasoningLoRAUri(null); // Clear LoRA URI
     Logger.info('RAG Reasoning Llama context unloaded.');
   }
 }
@@ -281,6 +285,7 @@ export async function unloadMainChatLlamaContext() {
     await mainChatLlamaContext.release();
     mainChatLlamaContext = null;
     loadedMainChatModel = null;
+    useEngineData.getState().setLastModelLoaded(undefined); // Clear last loaded main chat model
     Logger.info('Main Chat Llama context unloaded.');
   }
 }
