@@ -1,7 +1,7 @@
 // lib/rag/QwenLlamaRNEngine.ts
 import { Embeddings } from 'react-native-rag';
-import { LlamaContext } from 'llama.rn';
-import { getEmbeddingLlamaContext } from '../engine/Local/LlamaLocal'; // Assuming this provides the context
+import { LlamaContext } from 'cui-llama.rn';
+import { Llama } from '../engine/Local/LlamaLocal'; // Assuming this provides the context
 
 export class QwenLlamaRNEngine implements Embeddings {
     private embeddingContext: LlamaContext | null = null;
