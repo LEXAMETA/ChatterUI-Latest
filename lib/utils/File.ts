@@ -3,9 +3,9 @@ import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native'; // For platform-specific handling
 import { localDownload } from '@vali98/react-native-fs';
 
-import { Logger } from '../state/Logger'; // Assuming Logger is your custom logger
+import { Logger } from '../state/Logger'; // Replace with console if Logger not available
 
-// Define app-specific directories for organized file storage
+// App-specific directories for organized file storage
 export const AppDirectory = {
   ModelPath: `${FileSystem.documentDirectory}models/`,
   SessionPath: `${FileSystem.documentDirectory}session/`,
@@ -14,7 +14,17 @@ export const AppDirectory = {
 };
 
 /**
- * Pick a file using Expo DocumentPicker
+ * Information about a picked file.
+ */
+export interface PickedFileInfo {
+  uri: string;
+  name: string;
+  mimeType: string | null;
+  size: number | null;
+}
+
+/**
+ * Pick a file using Expo DocumentPicker.
  * @param type MIME type or array of MIME types, default '*/*'
  * @param copyToCacheDirectory Whether to copy file to cache for easier reading, default true
  * @returns File info or null if cancelled/error
@@ -22,11 +32,14 @@ export const AppDirectory = {
 export async function pickFile(
   type: string | string[] = '*/*',
   copyToCacheDirectory: boolean = true
-): Promise<{ uri: string; name: string; mimeType: string | null; size: number | null } | null> {
+): Promise<PickedFileInfo | null> {
   try {
-    const result = await DocumentPicker.getDocumentAsync({ type, copyToCacheDirectory });
+    const result = await DocumentPicker.getDocumentAsync({
+      type,
+      copyToCacheDirectory,
+    });
 
-    if (result.type === 'success') {
+    if (result.type === 'success' && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
       return {
         uri: asset.uri,
@@ -35,17 +48,17 @@ export async function pickFile(
         size: asset.size ?? null,
       };
     } else {
-      Logger.info('File picking cancelled');
+      Logger?.info?.('File picking cancelled or no file selected.') ?? console.log('File picking cancelled or no file selected.');
       return null;
     }
   } catch (error) {
-    Logger.error('Error picking file:', error);
+    Logger?.error?.('Error picking file:', error) ?? console.error('Error picking file:', error);
     return null;
   }
 }
 
 /**
- * Read file content as string from a URI
+ * Read file content as string from a URI.
  * @param uri File URI
  * @param encoding Encoding type (utf8 or base64), default UTF8
  * @returns String content or null on error
@@ -55,17 +68,32 @@ export async function readFileContent(
   encoding: FileSystem.EncodingType = FileSystem.EncodingType.UTF8
 ): Promise<string | null> {
   try {
-    // On Android, content URIs might require copyToCacheDirectory=true for direct reading
     const content = await FileSystem.readAsStringAsync(uri, { encoding });
     return content;
   } catch (error) {
-    Logger.error('Error reading file content from URI:', uri, error);
+    Logger?.error?.('Error reading file content from URI:', uri, error) ?? console.error('Error reading file content from URI:', uri, error);
     return null;
   }
 }
 
 /**
- * Get file extension from filename
+ * Read binary file URI for native module consumption.
+ * For llama.rn or similar, often the URI is passed directly.
+ * @param uri File URI
+ * @returns URI string or null on error
+ */
+export async function readBinaryFile(uri: string): Promise<string | null> {
+  try {
+    // Returning URI directly for native modules that accept file URIs.
+    return uri;
+  } catch (error) {
+    Logger?.error?.('Error reading binary file:', error) ?? console.error('Error reading binary file:', error);
+    return null;
+  }
+}
+
+/**
+ * Get file extension from filename.
  * @param filename Filename string
  * @returns Extension in lowercase or null if none
  */
@@ -78,7 +106,7 @@ export function getFileExtension(filename: string): string | null {
 }
 
 /**
- * Copy a file to the app's document directory under a given filename
+ * Copy a file to the app's document directory under a given filename.
  * @param sourceUri Source file URI
  * @param destinationFileName Destination filename (with extension)
  * @returns Destination URI or null on failure
@@ -89,21 +117,41 @@ export async function copyFileToAppDirectory(
 ): Promise<string | null> {
   try {
     const appDir = FileSystem.documentDirectory;
-    if (!appDir) throw new Error('Document directory not available.');
+    if (!appDir) throw new Error('Document directory not available on this device.');
 
-    const destinationUri = appDir + destinationFileName;
+    const destinationPath = `${appDir}${destinationFileName}`;
 
-    await FileSystem.copyAsync({ from: sourceUri, to: destinationUri });
-    Logger.info(`File copied to: ${destinationUri}`);
-    return destinationUri;
+    await FileSystem.copyAsync({
+      from: sourceUri,
+      to: destinationPath,
+    });
+    Logger?.info?.(`File copied from ${sourceUri} to ${destinationPath}`) ?? console.log(`File copied from ${sourceUri} to ${destinationPath}`);
+    return destinationPath;
   } catch (error) {
-    Logger.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error);
+    Logger?.error?.(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error) ?? console.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error);
     return null;
   }
 }
 
 /**
- * Save string data to cache directory and trigger download (for React Native environments)
+ * Check if a file exists in the app's document directory.
+ * @param fileName Filename to check
+ * @returns True if exists, false otherwise
+ */
+export async function fileExistsInAppDirectory(fileName: string): Promise<boolean> {
+  try {
+    const appDir = FileSystem.documentDirectory;
+    if (!appDir) return false;
+    const fileInfo = await FileSystem.getInfoAsync(`${appDir}${fileName}`);
+    return fileInfo.exists;
+  } catch (error) {
+    Logger?.error?.(`Error checking if file exists: ${fileName}`, error) ?? console.error(`Error checking if file exists: ${fileName}`, error);
+    return false;
+  }
+}
+
+/**
+ * Save string data to cache directory and trigger download (for React Native environments).
  * @param data String data to save
  * @param filename Filename with extension
  * @param encoding Encoding type ('base64' or 'utf8')
@@ -117,7 +165,7 @@ export const saveStringToDownload = async (
     await FileSystem.writeAsStringAsync(FileSystem.cacheDirectory + filename, data, { encoding });
     await localDownload(FileSystem.cacheDirectory?.replace('file://', '') + filename);
   } catch (e) {
-    Logger.error('Failed to download: ' + e);
+    Logger?.error?.('Failed to download: ' + e) ?? console.error('Failed to download: ' + e);
   }
 };
 
@@ -125,8 +173,8 @@ type PickerResult = { success: false } | { success: true; data: string };
 type JSONPickerResult = { success: false } | { success: true; data: any };
 
 /**
- * Pick a JSON document and parse it
- * @param multiple Allow multiple selection (currently unused in picker)
+ * Pick a JSON document and parse it.
+ * @param multiple Allow multiple selection (currently unused)
  * @returns Parsed JSON data or failure
  */
 export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONPickerResult> => {
@@ -137,13 +185,13 @@ export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONP
     const jsonData = JSON.parse(result.data);
     return { success: true, data: jsonData };
   } catch {
-    Logger.error('Failed to parse JSON data');
+    Logger?.error?.('Failed to parse JSON data') ?? console.error('Failed to parse JSON data');
     return { success: false };
   }
 };
 
 /**
- * Pick a document as string with specified encoding and type
+ * Pick a document as string with specified encoding and type.
  * @param options Options for picking document
  * @returns Success with data string or failure
  */
@@ -163,13 +211,13 @@ export const pickStringDocument = async ({
     }
     const uri = result.assets[0].uri;
     const data = await FileSystem.readAsStringAsync(uri, { encoding }).catch((e) => {
-      Logger.info(`Failed to read file: ${e}`);
+      Logger?.info?.(`Failed to read file: ${e}`) ?? console.log(`Failed to read file: ${e}`);
       return null;
     });
     if (!data) return { success: false };
     return { success: true, data };
   } catch (error) {
-    Logger.error('Error picking string document:', error);
+    Logger?.error?.('Error picking string document:', error) ?? console.error('Error picking string document:', error);
     return { success: false };
   }
 };
@@ -179,7 +227,7 @@ const GB = 1000 ** 3;
 const MB = 1000 ** 2;
 
 /**
- * Convert file size in bytes to a human-readable string (MB or GB)
+ * Convert file size in bytes to a human-readable string (MB or GB).
  * @param size Size in bytes
  * @returns Readable string like '12.34 MB' or '1.23 GB'
  */
