@@ -1,11 +1,11 @@
-import { initLlama, LlamaContext, ContextParams, CompletionParams } from 'cui-llama.rn';
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { ContextParams, LlamaContext, initLlama, CompletionParams } from 'cui-llama.rn';
 import * as FileSystem from 'expo-file-system';
 import { getInfoAsync } from 'expo-file-system';
 import { model_data, ModelDataType } from 'db/schema';
 import { db } from '@db';
 import { eq } from 'drizzle-orm';
-import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { Storage } from '@lib/enums/Storage';
 import { AppDirectory, readableFileSize } from '@lib/utils/File';
@@ -15,12 +15,11 @@ import { AppSettings } from '../../constants/GlobalValues';
 import { Logger } from '../../state/Logger';
 import { mmkv, mmkvStorage } from '../../storage/MMKV';
 
-// Global LlamaContext instances
+// Global LlamaContext instances and loaded model tracking
 let embeddingLlamaContext: LlamaContext | null = null;
 let ragReasoningLlamaContext: LlamaContext | null = null;
 let mainChatLlamaContext: LlamaContext | null = null;
 
-// Loaded models and LoRA paths tracking
 let loadedEmbeddingModel: ModelDataType | null = null;
 let loadedEmbeddingLoRAPath: string | null = null;
 
@@ -38,23 +37,18 @@ const defaultConfig: ContextParams = {
   batch: 512,
 };
 
-// MMKV keys for persistent URIs
-const SELECTED_EMBEDDING_MODEL_URI_KEY = 'selectedEmbeddingModelUri';
+// MMKV keys for persistent LoRA URIs
 const SELECTED_EMBEDDING_LORA_URI_KEY = 'selectedEmbeddingLoRAUri';
-const SELECTED_REASONING_MODEL_URI_KEY = 'selectedReasoningModelUri';
 const SELECTED_REASONING_LORA_URI_KEY = 'selectedReasoningLoRAUri';
 
-// Zustand store with persistence and MMKV syncing for URIs
+// Zustand store with persistence for config, model IDs, and LoRA URIs
 export type EngineDataProps = {
   config: ContextParams;
   lastModel?: ModelDataType;
   embeddingModelId?: number | null;
   ragReasoningModelId?: number | null;
 
-  // Persistent URIs for files
-  selectedEmbeddingModelUri: string | null;
   selectedEmbeddingLoRAUri: string | null;
-  selectedReasoningModelUri: string | null;
   selectedReasoningLoRAUri: string | null;
 
   setConfiguration: (config: ContextParams) => void;
@@ -62,9 +56,7 @@ export type EngineDataProps = {
   setEmbeddingModelId: (id: number | null) => void;
   setRagReasoningModelId: (id: number | null) => void;
 
-  setSelectedEmbeddingModelUri: (uri: string | null) => void;
   setSelectedEmbeddingLoRAUri: (uri: string | null) => void;
-  setSelectedReasoningModelUri: (uri: string | null) => void;
   setSelectedReasoningLoRAUri: (uri: string | null) => void;
 };
 
@@ -75,9 +67,7 @@ export const useEngineData = create<EngineDataProps>()(
       lastModel: undefined,
       embeddingModelId: null,
       ragReasoningModelId: null,
-      selectedEmbeddingModelUri: null,
       selectedEmbeddingLoRAUri: null,
-      selectedReasoningModelUri: null,
       selectedReasoningLoRAUri: null,
 
       setConfiguration: (config) => set(() => ({ config })),
@@ -85,17 +75,9 @@ export const useEngineData = create<EngineDataProps>()(
       setEmbeddingModelId: (id) => set(() => ({ embeddingModelId: id })),
       setRagReasoningModelId: (id) => set(() => ({ ragReasoningModelId: id })),
 
-      setSelectedEmbeddingModelUri: (uri) => {
-        set({ selectedEmbeddingModelUri: uri });
-        mmkv.set(SELECTED_EMBEDDING_MODEL_URI_KEY, uri ?? '');
-      },
       setSelectedEmbeddingLoRAUri: (uri) => {
         set({ selectedEmbeddingLoRAUri: uri });
         mmkv.set(SELECTED_EMBEDDING_LORA_URI_KEY, uri ?? '');
-      },
-      setSelectedReasoningModelUri: (uri) => {
-        set({ selectedReasoningModelUri: uri });
-        mmkv.set(SELECTED_REASONING_MODEL_URI_KEY, uri ?? '');
       },
       setSelectedReasoningLoRAUri: (uri) => {
         set({ selectedReasoningLoRAUri: uri });
@@ -109,14 +91,14 @@ export const useEngineData = create<EngineDataProps>()(
         lastModel: state.lastModel,
         embeddingModelId: state.embeddingModelId,
         ragReasoningModelId: state.ragReasoningModelId,
+        selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
+        selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
       }),
       storage: createJSONStorage(() => mmkvStorage),
-      version: 1,
+      version: 2,
       onRehydrateStorage: () => (state) => {
         if (state) {
-          state.selectedEmbeddingModelUri = mmkv.getString(SELECTED_EMBEDDING_MODEL_URI_KEY) || null;
           state.selectedEmbeddingLoRAUri = mmkv.getString(SELECTED_EMBEDDING_LORA_URI_KEY) || null;
-          state.selectedReasoningModelUri = mmkv.getString(SELECTED_REASONING_MODEL_URI_KEY) || null;
           state.selectedReasoningLoRAUri = mmkv.getString(SELECTED_REASONING_LORA_URI_KEY) || null;
         }
       },
