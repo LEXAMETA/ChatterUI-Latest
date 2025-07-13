@@ -21,11 +21,12 @@ import ThemedSwitch from '../components/input/ThemedSwitch';
 
 import { useTheme } from '../lib/theme/ThemeManager';
 import { pickFile, copyFileToAppDirectory } from '../lib/utils/File';
-import { Llama } from '../lib/engine/Local/LlamaLocal';
+import { Llama, useEngineData } from '../lib/engine/Local/LlamaLocal';
 import { KV } from '../lib/engine/Local/Model';
 import { Logger } from '../lib/state/Logger';
 import { readableFileSize } from '../lib/utils/File';
 import { ModelDataType } from 'db/schema';
+import * as FileSystem from 'expo-file-system';
 
 interface FileEntry {
   name: string;
@@ -62,15 +63,36 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
   const [availableModels, setAvailableModels] = useState<FileEntry[]>([]);
   const [availableLoRAs, setAvailableLoRAs] = useState<FileEntry[]>([]);
 
-  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState<FileEntry | null>(null);
-  const [selectedEmbeddingLoRA, setSelectedEmbeddingLoRA] = useState<FileEntry | null>(null);
-  const [selectedReasoningModel, setSelectedReasoningModel] = useState<FileEntry | null>(null);
-  const [selectedReasoningLoRA, setSelectedReasoningLoRA] = useState<FileEntry | null>(null);
-
-  const { config, setConfiguration: setConfig } = Llama.useEngineData((state) => ({
+  // Persistent URIs from Zustand
+  const {
+    selectedEmbeddingModelUri,
+    setSelectedEmbeddingModelUri,
+    selectedEmbeddingLoRAUri,
+    setSelectedEmbeddingLoRAUri,
+    selectedReasoningModelUri,
+    setSelectedReasoningModelUri,
+    selectedReasoningLoRAUri,
+    setSelectedReasoningLoRAUri,
+    config,
+    setConfiguration: setConfig,
+  } = useEngineData((state) => ({
+    selectedEmbeddingModelUri: state.selectedEmbeddingModelUri,
+    setSelectedEmbeddingModelUri: state.setSelectedEmbeddingModelUri,
+    selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
+    setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
+    selectedReasoningModelUri: state.selectedReasoningModelUri,
+    setSelectedReasoningModelUri: state.setSelectedReasoningModelUri,
+    selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
+    setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
     config: state.config,
     setConfiguration: state.setConfiguration,
   }));
+
+  // Local state mapped to persistent URIs
+  const [selectedEmbeddingModel, setSelectedEmbeddingModelLocal] = useState<FileEntry | null>(null);
+  const [selectedEmbeddingLoRA, setSelectedEmbeddingLoRALocal] = useState<FileEntry | null>(null);
+  const [selectedReasoningModel, setSelectedReasoningModelLocal] = useState<FileEntry | null>(null);
+  const [selectedReasoningLoRA, setSelectedReasoningLoRALocal] = useState<FileEntry | null>(null);
 
   const [saveKV, setSaveKV] = useMMKVBoolean('SaveLocalKV');
   const [autoloadLocal, setAutoloadLocal] = useMMKVBoolean('AutoLoadLocal');
@@ -78,7 +100,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
   const [kvSize, setKVSize] = useState(0);
 
-  // Load KV size on mount
   useEffect(() => {
     const getKVSize = async () => {
       const size = await KV.getKVSize();
@@ -87,7 +108,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     getKVSize();
   }, []);
 
-  // Android back button handling
   useFocusEffect(
     useCallback(() => {
       const backAction = () => {
@@ -99,7 +119,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }, [exit])
   );
 
-  // Load files from app storage directory
   const loadFilesFromDirectory = useCallback(async (subfolder: string, extensions: string[]): Promise<FileEntry[]> => {
     const dir = `${FileSystem.documentDirectory}${subfolder}`;
     const dirInfo = await FileSystem.getInfoAsync(dir);
@@ -113,9 +132,8 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
       .map((f) => ({ name: f, uri: `${dir}${f}` }));
   }, []);
 
-  // Load available models and LoRAs on mount
   useEffect(() => {
-    const loadStoredFiles = async () => {
+    const loadStoredFilesAndSelections = async () => {
       setLoadingFile(true);
       try {
         const models = await loadFilesFromDirectory('models/', ['.gguf']);
@@ -123,17 +141,27 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
         const loras = await loadFilesFromDirectory('loras/', ['.gguf', '.bin']);
         setAvailableLoRAs(loras);
+
+        setSelectedEmbeddingModelLocal(models.find((m) => m.uri === selectedEmbeddingModelUri) || null);
+        setSelectedEmbeddingLoRALocal(loras.find((l) => l.uri === selectedEmbeddingLoRAUri) || null);
+        setSelectedReasoningModelLocal(models.find((m) => m.uri === selectedReasoningModelUri) || null);
+        setSelectedReasoningLoRALocal(loras.find((l) => l.uri === selectedReasoningLoRAUri) || null);
       } catch (error) {
-        Logger.error('Error loading stored files:', error);
+        Logger.error('Error loading stored files and selections:', error);
         setStatusMessage('Error loading stored models/LoRAs.');
       } finally {
         setLoadingFile(false);
       }
     };
-    loadStoredFiles();
-  }, [loadFilesFromDirectory]);
+    loadStoredFilesAndSelections();
+  }, [
+    loadFilesFromDirectory,
+    selectedEmbeddingModelUri,
+    selectedEmbeddingLoRAUri,
+    selectedReasoningModelUri,
+    selectedReasoningLoRAUri,
+  ]);
 
-  // Pick and copy model or LoRA file
   const handlePickAndCopyFile = async (type: 'model' | 'lora') => {
     setLoadingFile(true);
     setStatusMessage(`Picking ${type}...`);
@@ -148,11 +176,8 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
         if (copiedUri) {
           setStatusMessage(`${type} '${fileInfo.name}' copied successfully.`);
-          if (type === 'model') {
-            setAvailableModels((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
-          } else {
-            setAvailableLoRAs((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
-          }
+          if (type === 'model') setAvailableModels((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
+          else setAvailableLoRAs((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
         } else {
           setStatusMessage(`Failed to copy ${type} '${fileInfo.name}'.`);
         }
@@ -167,21 +192,40 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }
   };
 
-  // Load embedding or reasoning context
+  const handleSelectFile = useCallback(
+    (file: FileEntry | null, fileType: 'model' | 'lora', contextType: 'embedding' | 'reasoning') => {
+      if (contextType === 'embedding') {
+        if (fileType === 'model') {
+          setSelectedEmbeddingModelLocal(file);
+          setSelectedEmbeddingModelUri(file ? file.uri : null);
+        } else {
+          setSelectedEmbeddingLoRALocal(file);
+          setSelectedEmbeddingLoRAUri(file ? file.uri : null);
+        }
+      } else {
+        if (fileType === 'model') {
+          setSelectedReasoningModelLocal(file);
+          setSelectedReasoningModelUri(file ? file.uri : null);
+        } else {
+          setSelectedReasoningLoRALocal(file);
+          setSelectedReasoningLoRAUri(file ? file.uri : null);
+        }
+      }
+    },
+    [
+      setSelectedEmbeddingModelUri,
+      setSelectedEmbeddingLoRAUri,
+      setSelectedReasoningModelUri,
+      setSelectedReasoningLoRAUri,
+    ]
+  );
+
   const handleLoadContext = async (contextType: 'embedding' | 'reasoning') => {
     setLoadingFile(true);
     setStatusMessage(`Loading ${contextType} context...`);
     try {
-      let modelToLoad: FileEntry | null;
-      let loraToLoad: FileEntry | null;
-
-      if (contextType === 'embedding') {
-        modelToLoad = selectedEmbeddingModel;
-        loraToLoad = selectedEmbeddingLoRA;
-      } else {
-        modelToLoad = selectedReasoningModel;
-        loraToLoad = selectedReasoningLoRA;
-      }
+      const modelToLoad = contextType === 'embedding' ? selectedEmbeddingModel : selectedReasoningModel;
+      const loraToLoad = contextType === 'embedding' ? selectedEmbeddingLoRA : selectedReasoningLoRA;
 
       if (!modelToLoad) {
         Alert.alert('Error', `Please select a base model for the ${contextType} context.`);
@@ -209,13 +253,13 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }
   };
 
-  // Render file selection UI for models/LoRAs
   const renderFileSelection = (
     title: string,
     files: FileEntry[],
     selectedFile: FileEntry | null,
-    onSelectFile: (file: FileEntry | null) => void,
-    fileType: 'model' | 'lora'
+    onSelectFileLocal: (file: FileEntry | null) => void,
+    fileType: 'model' | 'lora',
+    contextType: 'embedding' | 'reasoning'
   ) => (
     <View style={styles.section}>
       <SectionTitle title={title} />
@@ -226,7 +270,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
           <ThemedButton
             key={index}
             title={file.name}
-            onPress={() => onSelectFile(file)}
+            onPress={() => handleSelectFile(file, fileType, contextType)}
             style={[
               styles.fileButton,
               selectedFile?.uri === file.uri && styles.selectedFileButton,
@@ -237,7 +281,12 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         ))}
       </ScrollView>
       {files.length > 0 && (
-        <ThemedButton title={`Clear Selected ${fileType}`} onPress={() => onSelectFile(null)} style={styles.clearButton} textStyle={{ color: colors.text }} />
+        <ThemedButton
+          title={`Clear Selected ${fileType}`}
+          onPress={() => handleSelectFile(null, fileType, contextType)}
+          style={styles.clearButton}
+          textStyle={{ color: colors.text }}
+        />
       )}
     </View>
   );
@@ -449,10 +498,8 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
 export default ModelSettings;
 
-const useStyles = () => {
-  const { color, spacing, borderRadius, fontSize } = Theme.useTheme();
-
-  return StyleSheet.create({
+const useStyles = ({ colors, spacing, borderRadius, fontSize }: any) =>
+  StyleSheet.create({
     container: {
       flex: 1,
       padding: spacing.l,
@@ -466,7 +513,7 @@ const useStyles = () => {
     section: {
       marginTop: 20,
       borderWidth: 1,
-      borderColor: color.neutral._200,
+      borderColor: colors.neutral._200,
       borderRadius: borderRadius.l,
       padding: spacing.m,
     },
@@ -482,16 +529,16 @@ const useStyles = () => {
       marginRight: 8,
       marginBottom: 8,
       borderWidth: 1,
-      borderColor: color.neutral._400,
+      borderColor: colors.neutral._400,
     },
     selectedFileButton: {
-      borderColor: color.primary,
+      borderColor: colors.primary,
       borderWidth: 2,
     },
     clearButton: {
       marginTop: 5,
       backgroundColor: 'transparent',
-      borderColor: color.neutral._400,
+      borderColor: colors.neutral._400,
       borderWidth: 1,
       paddingVertical: 8,
     },
@@ -501,7 +548,7 @@ const useStyles = () => {
     },
     sectionContainer: {
       padding: spacing.l,
-      backgroundColor: color.neutral._100,
+      backgroundColor: colors.neutral._100,
       borderRadius: borderRadius.l,
       marginBottom: spacing.l,
     },
@@ -511,27 +558,26 @@ const useStyles = () => {
     pickerTitle: {
       fontSize: fontSize.m,
       fontWeight: '600',
-      color: color.text._400,
+      color: colors.text._400,
       marginBottom: spacing.s,
     },
     pickerButton: {
       borderWidth: 1,
-      borderColor: color.neutral._400,
+      borderColor: colors.neutral._400,
       borderRadius: borderRadius.s,
       padding: spacing.m,
       alignItems: 'center',
-      backgroundColor: color.neutral._100,
+      backgroundColor: colors.neutral._100,
     },
     pickerButtonText: {
       fontSize: fontSize.m,
       fontWeight: 'bold',
-      color: color.primary,
+      color: colors.primary,
     },
     modelDetailsSmall: {
       fontSize: fontSize.s,
-      color: color.text._400,
+      color: colors.text._400,
       marginTop: spacing.xs,
       textAlign: 'center',
     },
   });
-};
