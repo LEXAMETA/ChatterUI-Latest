@@ -15,7 +15,7 @@ import { AppSettings } from '../../constants/GlobalValues';
 import { Logger } from '../../state/Logger';
 import { mmkv, mmkvStorage } from '../../storage/MMKV';
 
-// Global LlamaContext instances and loaded model tracking
+// Global LlamaContext and loaded model tracking
 let embeddingLlamaContext: LlamaContext | null = null;
 let ragReasoningLlamaContext: LlamaContext | null = null;
 let mainChatLlamaContext: LlamaContext | null = null;
@@ -41,7 +41,6 @@ const defaultConfig: ContextParams = {
 const SELECTED_EMBEDDING_LORA_URI_KEY = 'selectedEmbeddingLoRAUri';
 const SELECTED_REASONING_LORA_URI_KEY = 'selectedReasoningLoRAUri';
 
-// Zustand store with persistence for config, model IDs, and LoRA URIs
 export type EngineDataProps = {
   config: ContextParams;
   lastModel?: ModelDataType;
@@ -106,7 +105,6 @@ export const useEngineData = create<EngineDataProps>()(
   )
 );
 
-// Internal helper to load model context with optional LoRA
 async function loadModelContext(
   modelId: number,
   expectedType: ModelDataType['model_type'],
@@ -177,7 +175,6 @@ async function loadModelContext(
   return { context: llamaContext, model };
 }
 
-// Public async getters for contexts, with LoRA support
 export async function getEmbeddingLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> {
   const embeddingModelId = useEngineData.getState().embeddingModelId;
   if (!embeddingModelId) {
@@ -259,7 +256,6 @@ export async function getMainChatLlamaContext(): Promise<LlamaContext | null> {
   return mainChatLlamaContext;
 }
 
-// Explicit unload functions
 export async function unloadEmbeddingLlamaContext() {
   if (embeddingLlamaContext) {
     await embeddingLlamaContext.release();
@@ -288,6 +284,8 @@ export async function unloadMainChatLlamaContext() {
     Logger.info('Main Chat Llama context unloaded.');
   }
 }
+
+// Main chat UI Zustand store and helpers omitted for brevity; implement as needed.
 
 // Main chat UI Zustand store
 
