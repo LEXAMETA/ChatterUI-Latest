@@ -1,4 +1,4 @@
-import { initLlama, LlamaContext, ContextParams } from 'cui-llama.rn';
+import { initLlama, LlamaContext, ContextParams, CompletionParams } from 'cui-llama.rn';
 import * as FileSystem from 'expo-file-system';
 import { getInfoAsync } from 'expo-file-system';
 import { model_data, ModelDataType } from 'db/schema';
@@ -15,12 +15,12 @@ import { AppSettings } from '../../constants/GlobalValues';
 import { Logger } from '../../state/Logger';
 import { mmkv, mmkvStorage } from '../../storage/MMKV';
 
-// --- Global LlamaContext instances and loaded model tracking ---
-
+// Global LlamaContext instances
 let embeddingLlamaContext: LlamaContext | null = null;
 let ragReasoningLlamaContext: LlamaContext | null = null;
 let mainChatLlamaContext: LlamaContext | null = null;
 
+// Loaded models and LoRA paths tracking
 let loadedEmbeddingModel: ModelDataType | null = null;
 let loadedEmbeddingLoRAPath: string | null = null;
 
@@ -31,24 +31,41 @@ let loadedMainChatModel: ModelDataType | null = null;
 
 const sessionFile = `${AppDirectory.SessionPath}llama-session.bin`;
 
-const defaultConfig = {
+const defaultConfig: ContextParams = {
   context_length: 4096,
   threads: 4,
   gpu_layers: 0,
   batch: 512,
 };
 
-// --- Zustand store for engine config and model IDs ---
+// MMKV keys for persistent URIs
+const SELECTED_EMBEDDING_MODEL_URI_KEY = 'selectedEmbeddingModelUri';
+const SELECTED_EMBEDDING_LORA_URI_KEY = 'selectedEmbeddingLoRAUri';
+const SELECTED_REASONING_MODEL_URI_KEY = 'selectedReasoningModelUri';
+const SELECTED_REASONING_LORA_URI_KEY = 'selectedReasoningLoRAUri';
 
+// Zustand store with persistence and MMKV syncing for URIs
 export type EngineDataProps = {
   config: ContextParams;
   lastModel?: ModelDataType;
   embeddingModelId?: number | null;
   ragReasoningModelId?: number | null;
+
+  // Persistent URIs for files
+  selectedEmbeddingModelUri: string | null;
+  selectedEmbeddingLoRAUri: string | null;
+  selectedReasoningModelUri: string | null;
+  selectedReasoningLoRAUri: string | null;
+
   setConfiguration: (config: ContextParams) => void;
   setLastModelLoaded: (model: ModelDataType) => void;
   setEmbeddingModelId: (id: number | null) => void;
   setRagReasoningModelId: (id: number | null) => void;
+
+  setSelectedEmbeddingModelUri: (uri: string | null) => void;
+  setSelectedEmbeddingLoRAUri: (uri: string | null) => void;
+  setSelectedReasoningModelUri: (uri: string | null) => void;
+  setSelectedReasoningLoRAUri: (uri: string | null) => void;
 };
 
 export const useEngineData = create<EngineDataProps>()(
@@ -58,10 +75,32 @@ export const useEngineData = create<EngineDataProps>()(
       lastModel: undefined,
       embeddingModelId: null,
       ragReasoningModelId: null,
+      selectedEmbeddingModelUri: null,
+      selectedEmbeddingLoRAUri: null,
+      selectedReasoningModelUri: null,
+      selectedReasoningLoRAUri: null,
+
       setConfiguration: (config) => set(() => ({ config })),
       setLastModelLoaded: (model) => set(() => ({ lastModel: model })),
       setEmbeddingModelId: (id) => set(() => ({ embeddingModelId: id })),
       setRagReasoningModelId: (id) => set(() => ({ ragReasoningModelId: id })),
+
+      setSelectedEmbeddingModelUri: (uri) => {
+        set({ selectedEmbeddingModelUri: uri });
+        mmkv.set(SELECTED_EMBEDDING_MODEL_URI_KEY, uri ?? '');
+      },
+      setSelectedEmbeddingLoRAUri: (uri) => {
+        set({ selectedEmbeddingLoRAUri: uri });
+        mmkv.set(SELECTED_EMBEDDING_LORA_URI_KEY, uri ?? '');
+      },
+      setSelectedReasoningModelUri: (uri) => {
+        set({ selectedReasoningModelUri: uri });
+        mmkv.set(SELECTED_REASONING_MODEL_URI_KEY, uri ?? '');
+      },
+      setSelectedReasoningLoRAUri: (uri) => {
+        set({ selectedReasoningLoRAUri: uri });
+        mmkv.set(SELECTED_REASONING_LORA_URI_KEY, uri ?? '');
+      },
     }),
     {
       name: Storage.EngineData,
@@ -73,12 +112,19 @@ export const useEngineData = create<EngineDataProps>()(
       }),
       storage: createJSONStorage(() => mmkvStorage),
       version: 1,
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.selectedEmbeddingModelUri = mmkv.getString(SELECTED_EMBEDDING_MODEL_URI_KEY) || null;
+          state.selectedEmbeddingLoRAUri = mmkv.getString(SELECTED_EMBEDDING_LORA_URI_KEY) || null;
+          state.selectedReasoningModelUri = mmkv.getString(SELECTED_REASONING_MODEL_URI_KEY) || null;
+          state.selectedReasoningLoRAUri = mmkv.getString(SELECTED_REASONING_LORA_URI_KEY) || null;
+        }
+      },
     }
   )
 );
 
-// --- Internal helper to load model context with optional LoRA support ---
-
+// Internal helper to load model context with optional LoRA
 async function loadModelContext(
   modelId: number,
   expectedType: ModelDataType['model_type'],
@@ -130,7 +176,7 @@ async function loadModelContext(
     embedding: isEmbeddingModel,
     lora: loraPath || undefined,
     use_mlock: true,
-    n_gpu_layers: 99, // Example for iOS GPU offloading
+    n_gpu_layers: 99,
     ctx_shift: false,
   };
 
@@ -149,11 +195,8 @@ async function loadModelContext(
   return { context: llamaContext, model };
 }
 
-// --- Public async getters for contexts ---
-
-export async function getEmbeddingLlamaContext(
-  loraPath: string | null = null
-): Promise<LlamaContext | null> {
+// Public async getters for contexts, with LoRA support
+export async function getEmbeddingLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> {
   const embeddingModelId = useEngineData.getState().embeddingModelId;
   if (!embeddingModelId) {
     Logger.warn('No RAG Embedding Model selected in settings.');
@@ -180,9 +223,7 @@ export async function getEmbeddingLlamaContext(
   return embeddingLlamaContext;
 }
 
-export async function getRagReasoningLlamaContext(
-  loraPath: string | null = null
-): Promise<LlamaContext | null> {
+export async function getRagReasoningLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> {
   const ragReasoningModelId = useEngineData.getState().ragReasoningModelId;
   if (!ragReasoningModelId) {
     Logger.warn('No RAG Reasoning Model selected in settings.');
@@ -236,8 +277,7 @@ export async function getMainChatLlamaContext(): Promise<LlamaContext | null> {
   return mainChatLlamaContext;
 }
 
-// --- Explicit unload functions ---
-
+// Explicit unload functions
 export async function unloadEmbeddingLlamaContext() {
   if (embeddingLlamaContext) {
     await embeddingLlamaContext.release();
@@ -267,9 +307,7 @@ export async function unloadMainChatLlamaContext() {
   }
 }
 
-// --- Main chat UI Zustand store ---
-
-import { CompletionParams } from 'cui-llama.rn';
+// Main chat UI Zustand store
 
 export type CompletionTimings = {
   predicted_per_token_ms: number;
@@ -451,7 +489,6 @@ export const useLlama = create<LlamaState>()((set, get) => ({
   },
 }));
 
-// Helper function to format completion timings
 function textTimings(timings: CompletionTimings): string {
   return (
     `\n[Prompt Timings]` +
