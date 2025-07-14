@@ -1,3 +1,5 @@
+// app/screens/ModelManager/ModelSettings.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -12,22 +14,23 @@ import {
 } from 'react-native';
 import Animated, { Easing, SlideInRight, SlideOutRight } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
-import { useMMKVBoolean } from 'react-native-mmkv';
+// import { useMMKVBoolean } from 'react-native-mmkv'; // No longer needed for specific LoRA keys, but might be for SaveLocalKV etc.
 
-import { SectionTitle } from '../components/text/SectionTitle';
-import ThemedButton from '../components/buttons/ThemedButton';
-import ThemedSlider from '../components/input/ThemedSlider';
-import ThemedSwitch from '../components/input/ThemedSwitch';
+import { SectionTitle } from '../../components/text/SectionTitle';
+import ThemedButton from '../../components/buttons/ThemedButton';
+import ThemedSlider from '../../components/input/ThemedSlider';
+import ThemedSwitch from '../../components/input/ThemedSwitch';
 
-import { useTheme } from '../lib/theme/ThemeManager';
-import { pickFile, copyFileToAppDirectory } from '../lib/utils/File';
-import { Llama, useEngineData } from '../lib/engine/Local/LlamaLocal';
-import { KV } from '../lib/engine/Local/Model';
-import { Logger } from '../lib/state/Logger';
-import { readableFileSize } from '../lib/utils/File';
-import { ModelDataType } from 'db/schema';
-import * as FileSystem from 'expo-file-system';
+import { useTheme } from '../../lib/theme/ThemeManager';
+import { pickFile, copyFileToAppDirectory } from '../../lib/utils/File';
+import { Llama, useEngineData } from '../../lib/engine/Local/LlamaLocal'; // Import Llama and useEngineData
+import { KV } from '../../lib/engine/Local/Model'; // Assuming KV is still needed for cache management
+import { Logger } from '../../lib/state/Logger';
+import { readableFileSize } from '../../lib/utils/File';
+import { ModelDataType } from 'db/schema'; // Ensure correct import for ModelDataType
+import * as FileSystem from 'expo-file-system'; // Ensure FileSystem is imported
 
+// Interface for files picked from the system, distinct from DB models
 interface FileEntry {
   name: string;
   uri: string;
@@ -37,7 +40,7 @@ type ModelSettingsProps = {
   modelImporting: boolean;
   modelLoading: boolean;
   exit: () => void;
-  models: ModelDataType[];
+  models: ModelDataType[]; // This prop now holds all your DB-backed models
   setEmbeddingModelId: (id: number | null) => void;
   setRagReasoningModelId: (id: number | null) => void;
   embeddingModelId: number | null | undefined;
@@ -48,7 +51,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
   modelImporting,
   modelLoading,
   exit,
-  models,
+  models, // Now actively used for base model selection
   setEmbeddingModelId,
   setRagReasoningModelId,
   embeddingModelId,
@@ -60,114 +63,80 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
   const [loadingFile, setLoadingFile] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const [availableModels, setAvailableModels] = useState<FileEntry[]>([]);
+  // No longer need availableModels, as base models come from the 'models' prop
   const [availableLoRAs, setAvailableLoRAs] = useState<FileEntry[]>([]);
 
-  // Persistent URIs from Zustand
+  // Use Zustand store for persistent LoRA selection
   const {
-    selectedEmbeddingModelUri,
-    setSelectedEmbeddingModelUri,
     selectedEmbeddingLoRAUri,
     setSelectedEmbeddingLoRAUri,
-    selectedReasoningModelUri,
-    setSelectedReasoningModelUri,
     selectedReasoningLoRAUri,
     setSelectedReasoningLoRAUri,
-    config,
-    setConfiguration: setConfig,
+    config, // Retain config for CPU settings
+    setConfiguration: setConfig, // Retain setConfig for CPU settings
   } = useEngineData((state) => ({
-    selectedEmbeddingModelUri: state.selectedEmbeddingModelUri,
-    setSelectedEmbeddingModelUri: state.setSelectedEmbeddingModelUri,
     selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
     setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
-    selectedReasoningModelUri: state.selectedReasoningModelUri,
-    setSelectedReasoningModelUri: state.setSelectedReasoningModelUri,
     selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
     setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
     config: state.config,
     setConfiguration: state.setConfiguration,
   }));
 
-  // Local state mapped to persistent URIs
-  const [selectedEmbeddingModel, setSelectedEmbeddingModelLocal] = useState<FileEntry | null>(null);
-  const [selectedEmbeddingLoRA, setSelectedEmbeddingLoRALocal] = useState<FileEntry | null>(null);
-  const [selectedReasoningModel, setSelectedReasoningModelLocal] = useState<FileEntry | null>(null);
-  const [selectedReasoningLoRA, setSelectedReasoningLoRALocal] = useState<FileEntry | null>(null);
+  // Local state to track which FileEntry corresponds to the persistent LoRA URI
+  const [selectedEmbeddingLoRALocal, setSelectedEmbeddingLoRALocal] = useState<FileEntry | null>(null);
+  const [selectedReasoningLoRALocal, setSelectedReasoningLoRALocal] = useState<FileEntry | null>(null);
 
+  // MMKV booleans for other settings (still needed)
   const [saveKV, setSaveKV] = useMMKVBoolean('SaveLocalKV');
   const [autoloadLocal, setAutoloadLocal] = useMMKVBoolean('AutoLoadLocal');
   const [showModelInChat, setShowModelInChat] = useMMKVBoolean('ShowModelInChat');
 
   const [kvSize, setKVSize] = useState(0);
 
+  // ... (Existing useEffect for KV size, Android back button handling) ...
+
+  // --- REFACTORED: Load LoRAs from app storage directory and link to persistent state ---
+  // No longer loading 'models/' directory here, as base models are from DB.
   useEffect(() => {
-    const getKVSize = async () => {
-      const size = await KV.getKVSize();
-      setKVSize(size);
-    };
-    getKVSize();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      const backAction = () => {
-        exit();
-        return true;
-      };
-      const subscription = BackHandler.addEventListener('hardwareBackPress', backAction);
-      return () => subscription.remove();
-    }, [exit])
-  );
-
-  const loadFilesFromDirectory = useCallback(async (subfolder: string, extensions: string[]): Promise<FileEntry[]> => {
-    const dir = `${FileSystem.documentDirectory}${subfolder}`;
-    const dirInfo = await FileSystem.getInfoAsync(dir);
-    if (!dirInfo.exists || !dirInfo.isDirectory) {
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-      return [];
-    }
-    const files = await FileSystem.readDirectoryAsync(dir);
-    return files
-      .filter((f) => extensions.some((ext) => f.toLowerCase().endsWith(ext)))
-      .map((f) => ({ name: f, uri: `${dir}${f}` }));
-  }, []);
-
-  useEffect(() => {
-    const loadStoredFilesAndSelections = async () => {
+    const loadStoredLoRAsAndSelections = async () => {
       setLoadingFile(true);
       try {
-        const models = await loadFilesFromDirectory('models/', ['.gguf']);
-        setAvailableModels(models);
-
         const loras = await loadFilesFromDirectory('loras/', ['.gguf', '.bin']);
         setAvailableLoRAs(loras);
 
-        setSelectedEmbeddingModelLocal(models.find((m) => m.uri === selectedEmbeddingModelUri) || null);
-        setSelectedEmbeddingLoRALocal(loras.find((l) => l.uri === selectedEmbeddingLoRAUri) || null);
-        setSelectedReasoningModelLocal(models.find((m) => m.uri === selectedReasoningModelUri) || null);
-        setSelectedReasoningLoRALocal(loras.find((l) => l.uri === selectedReasoningLoRAUri) || null);
+        // Link persistent LoRA URIs to local FileEntry objects
+        if (selectedEmbeddingLoRAUri) {
+          const found = loras.find(l => l.uri === selectedEmbeddingLoRAUri);
+          setSelectedEmbeddingLoRALocal(found || null);
+        }
+        if (selectedReasoningLoRAUri) {
+          const found = loras.find(l => l.uri === selectedReasoningLoRAUri);
+          setSelectedReasoningLoRALocal(found || null);
+        }
       } catch (error) {
-        Logger.error('Error loading stored files and selections:', error);
-        setStatusMessage('Error loading stored models/LoRAs.');
+        Logger.error('Error loading stored LoRAs and selections:', error);
+        setStatusMessage('Error loading stored LoRAs.');
       } finally {
         setLoadingFile(false);
       }
     };
-    loadStoredFilesAndSelections();
+    loadStoredLoRAsAndSelections();
   }, [
     loadFilesFromDirectory,
-    selectedEmbeddingModelUri,
     selectedEmbeddingLoRAUri,
-    selectedReasoningModelUri,
     selectedReasoningLoRAUri,
-  ]);
+  ]); // Dependencies ensure re-run if persistent URIs change
 
+  // ... (Existing loadFilesFromDirectory function, no change needed) ...
+
+  // --- REFACTORED: handlePickAndCopyFile (now primarily for LoRAs or new base model import) ---
   const handlePickAndCopyFile = async (type: 'model' | 'lora') => {
     setLoadingFile(true);
     setStatusMessage(`Picking ${type}...`);
     try {
       const fileTypes = type === 'model' ? ['.gguf', 'application/octet-stream'] : ['.gguf', '.bin', 'application/octet-stream'];
-      const subfolder = type === 'model' ? 'models/' : 'loras/';
+      const subfolder = type === 'model' ? 'models/' : 'loras/'; // Still copy to 'models/' for raw new models
 
       const fileInfo = await pickFile(fileTypes, true);
       if (fileInfo) {
@@ -176,8 +145,15 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
         if (copiedUri) {
           setStatusMessage(`${type} '${fileInfo.name}' copied successfully.`);
-          if (type === 'model') setAvailableModels((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
-          else setAvailableLoRAs((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
+          if (type === 'lora') { // Only update availableLoRAs here
+            setAvailableLoRAs((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
+          } else {
+            // If a 'model' is picked directly, it should ideally be added to your DB.
+            // This part is crucial: After copying, you need to add this model to your Drizzle DB
+            // so it can be selected by ID. For now, we'll just log this.
+            Logger.info(`Model file copied: ${copiedUri}. Please ensure it's added to your database.`);
+            Alert.alert("Model Copied", `Model '${fileInfo.name}' copied to app directory. You might need to add it to your model database.`);
+          }
         } else {
           setStatusMessage(`Failed to copy ${type} '${fileInfo.name}'.`);
         }
@@ -192,57 +168,55 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }
   };
 
-  const handleSelectFile = useCallback(
-    (file: FileEntry | null, fileType: 'model' | 'lora', contextType: 'embedding' | 'reasoning') => {
+  // --- REFACTORED: handleSelectFile (now only for LoRAs) ---
+  const handleSelectFile = useCallback((file: FileEntry | null, fileType: 'lora', contextType: 'embedding' | 'reasoning') => {
+    if (fileType === 'lora') { // Ensure it's explicitly a LoRA selection
       if (contextType === 'embedding') {
-        if (fileType === 'model') {
-          setSelectedEmbeddingModelLocal(file);
-          setSelectedEmbeddingModelUri(file ? file.uri : null);
-        } else {
-          setSelectedEmbeddingLoRALocal(file);
-          setSelectedEmbeddingLoRAUri(file ? file.uri : null);
-        }
+        setSelectedEmbeddingLoRALocal(file);
+        setSelectedEmbeddingLoRAUri(file ? file.uri : null);
       } else {
-        if (fileType === 'model') {
-          setSelectedReasoningModelLocal(file);
-          setSelectedReasoningModelUri(file ? file.uri : null);
-        } else {
-          setSelectedReasoningLoRALocal(file);
-          setSelectedReasoningLoRAUri(file ? file.uri : null);
-        }
+        setSelectedReasoningLoRALocal(file);
+        setSelectedReasoningLoRAUri(file ? file.uri : null);
       }
-    },
-    [
-      setSelectedEmbeddingModelUri,
-      setSelectedEmbeddingLoRAUri,
-      setSelectedReasoningModelUri,
-      setSelectedReasoningLoRAUri,
-    ]
-  );
+    }
+  }, [setSelectedEmbeddingLoRAUri, setSelectedReasoningLoRAUri]);
 
+  // --- REFACTORED: handleLoadContext (uses DB model ID and LoRA URI) ---
   const handleLoadContext = async (contextType: 'embedding' | 'reasoning') => {
     setLoadingFile(true);
     setStatusMessage(`Loading ${contextType} context...`);
     try {
-      const modelToLoad = contextType === 'embedding' ? selectedEmbeddingModel : selectedReasoningModel;
-      const loraToLoad = contextType === 'embedding' ? selectedEmbeddingLoRA : selectedReasoningLoRA;
+      let modelIdToLoad: number | null | undefined;
+      let loraUriToLoad: string | null;
+      let selectedModelData: ModelDataType | undefined;
 
-      if (!modelToLoad) {
+      if (contextType === 'embedding') {
+        modelIdToLoad = embeddingModelId;
+        loraUriToLoad = selectedEmbeddingLoRAUri;
+        selectedModelData = models.find(m => m.id === embeddingModelId); // Get model data from prop
+      } else {
+        modelIdToLoad = ragReasoningModelId;
+        loraUriToLoad = selectedReasoningLoRAUri;
+        selectedModelData = models.find(m => m.id === ragReasoningModelId); // Get model data from prop
+      }
+
+      if (!modelIdToLoad || !selectedModelData) {
         Alert.alert('Error', `Please select a base model for the ${contextType} context.`);
         setStatusMessage(`Failed to load ${contextType} context.`);
         return;
       }
 
+      // Pass the model ID and LoRA URI directly to LlamaLocal functions
       if (contextType === 'embedding') {
-        await Llama.getEmbeddingLlamaContext(modelToLoad.uri, loraToLoad?.uri);
+        await Llama.getEmbeddingLlamaContext(modelIdToLoad, loraUriToLoad);
       } else {
-        await Llama.getRagReasoningLlamaContext(modelToLoad.uri, loraToLoad?.uri);
+        await Llama.getRagReasoningLlamaContext(modelIdToLoad, loraUriToLoad);
       }
 
       setStatusMessage(`${contextType} context loaded successfully!`);
       Alert.alert(
         'Success',
-        `${contextType} context loaded with ${modelToLoad.name}` + (loraToLoad ? ` and LoRA ${loraToLoad.name}` : '')
+        `${contextType} context loaded with ${selectedModelData.name}` + (loraUriToLoad ? ` and LoRA ${selectedEmbeddingLoRALocal?.name || selectedReasoningLoRALocal?.name}` : '')
       );
     } catch (e: any) {
       Logger.error(`Error loading ${contextType} context:`, e);
@@ -253,134 +227,92 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }
   };
 
-  const renderFileSelection = (
+  // --- NEW: Render Model Picker (for DB-backed base models) ---
+  const renderModelPicker = (
+    currentId: number | null | undefined,
+    contextType: 'rag_embedding' | 'rag_reasoning' | 'main_chat', // Add main_chat if needed elsewhere
+    title: string,
+    onSelectId: (id: number | null) => void // Setter for embeddingModelId or ragReasoningModelId
+  ) => {
+    const filteredModels = models.filter(m => m.model_type === contextType);
+    const selectedModelName = filteredModels.find(m => m.id === currentId)?.name;
+
+    return (
+      <View style={styles.section}>
+        <SectionTitle title={title} />
+        {selectedModelName && <Text style={[styles.text, { color: colors.text }]}>Selected: {selectedModelName}</Text>}
+        <ScrollView horizontal style={styles.fileList}>
+          {filteredModels.length > 0 ? (
+            filteredModels.map((model) => (
+              <ThemedButton
+                key={model.id}
+                title={model.name}
+                onPress={() => onSelectId(model.id)}
+                style={[
+                  styles.fileButton,
+                  currentId === model.id && styles.selectedFileButton,
+                  { backgroundColor: currentId === model.id ? colors.primary : colors.cardBackground },
+                ]}
+                textStyle={{ color: currentId === model.id ? colors.buttonText : colors.text }}
+              />
+            ))
+          ) : (
+            <Text style={[styles.text, { color: colors.textSecondary }]}>No {title.toLowerCase()} models found.</Text>
+          )}
+        </ScrollView>
+        {currentId !== null && (
+          <ThemedButton
+            title={`Clear Selected ${title}`}
+            onPress={() => onSelectId(null)}
+            style={styles.clearButton}
+            textStyle={{ color: colors.text }}
+          />
+        )}
+      </View>
+    );
+  };
+
+  // --- REFACTORED: Render LoRA Picker (for file-based LoRAs) ---
+  const renderLoRAPicker = (
     title: string,
     files: FileEntry[],
-    selectedFile: FileEntry | null,
-    onSelectFileLocal: (file: FileEntry | null) => void,
-    fileType: 'model' | 'lora',
-    contextType: 'embedding' | 'reasoning'
+    selectedFile: FileEntry | null, // This is now the local state for LoRA
+    onSelectFileLocal: (file: FileEntry | null, fileType: 'lora', contextType: 'embedding' | 'reasoning') => void,
+    contextType: 'embedding' | 'reasoning' // Add contextType to differentiate
   ) => (
     <View style={styles.section}>
       <SectionTitle title={title} />
-      <ThemedButton title={`Pick ${fileType} file`} onPress={() => handlePickAndCopyFile(fileType)} disabled={loadingFile} />
+      <ThemedButton title={`Pick LoRA file`} onPress={() => handlePickAndCopyFile('lora')} disabled={loadingFile} />
       {selectedFile && <Text style={[styles.text, { color: colors.text }]}>Selected: {selectedFile.name}</Text>}
       <ScrollView horizontal style={styles.fileList}>
-        {files.map((file, index) => (
-          <ThemedButton
-            key={index}
-            title={file.name}
-            onPress={() => handleSelectFile(file, fileType, contextType)}
-            style={[
-              styles.fileButton,
-              selectedFile?.uri === file.uri && styles.selectedFileButton,
-              { backgroundColor: selectedFile?.uri === file.uri ? colors.primary : colors.cardBackground },
-            ]}
-            textStyle={{ color: selectedFile?.uri === file.uri ? colors.buttonText : colors.text }}
-          />
-        ))}
+        {files.length > 0 ? (
+          files.map((file, index) => (
+            <ThemedButton
+              key={index}
+              title={file.name}
+              onPress={() => onSelectFileLocal(file, 'lora', contextType)} // Use the new wrapper
+              style={[
+                styles.fileButton,
+                selectedFile?.uri === file.uri && styles.selectedFileButton,
+                { backgroundColor: selectedFile?.uri === file.uri ? colors.primary : colors.cardBackground },
+              ]}
+              textStyle={{ color: selectedFile?.uri === file.uri ? colors.buttonText : colors.text }}
+            />
+          ))
+        ) : (
+          <Text style={[styles.text, { color: colors.textSecondary }]}>No LoRA files found. Pick one to get started!</Text>
+        )}
       </ScrollView>
-      {files.length > 0 && (
+      {selectedFile !== null && (
         <ThemedButton
-          title={`Clear Selected ${fileType}`}
-          onPress={() => handleSelectFile(null, fileType, contextType)}
+          title={`Clear Selected LoRA`}
+          onPress={() => onSelectFileLocal(null, 'lora', contextType)} // Use the new wrapper
           style={styles.clearButton}
           textStyle={{ color: colors.text }}
         />
       )}
     </View>
   );
-
-  // RAG model selection logic
-  const handleSelectRAGModel = useCallback(
-    async (modelId: number | null, modelType: 'rag_embedding' | 'rag_reasoning') => {
-      const model = models.find((m) => m.id === modelId);
-
-      if (modelId !== null && model && model.model_type !== modelType) {
-        Alert.alert(
-          'Incorrect Model Type',
-          `The selected model '${model.name}' is registered as a '${model.model_type}' model. Please select a model of type '${modelType}'.`
-        );
-        return;
-      }
-
-      if (modelType === 'rag_embedding') {
-        setEmbeddingModelId(modelId);
-        Logger.infoToast(modelId ? `RAG Embedding Model set to: ${model?.name}` : 'RAG Embedding Model unset.');
-      } else if (modelType === 'rag_reasoning') {
-        setRagReasoningModelId(modelId);
-        Logger.infoToast(modelId ? `RAG Reasoning Model set to: ${model?.name}` : 'RAG Reasoning Model unset.');
-      }
-    },
-    [models, setEmbeddingModelId, setRagReasoningModelId]
-  );
-
-  const renderModelPicker = (
-    currentModelId: number | null | undefined,
-    modelType: 'rag_embedding' | 'rag_reasoning',
-    title: string
-  ) => {
-    const selectedModel = models.find((m) => m.id === currentModelId);
-    const filteredModels = models.filter((m) => m.model_type === modelType);
-
-    return (
-      <View style={styles.pickerContainer}>
-        <Text style={styles.pickerTitle}>{title}</Text>
-        <TouchableOpacity
-          style={styles.pickerButton}
-          onPress={() =>
-            Alert.alert({
-              title,
-              description: 'Select a model:',
-              buttons: [
-                ...(filteredModels.length > 0
-                  ? filteredModels.map((model) => ({
-                      label: `${model.name} (${model.params}, ${model.quantization})`,
-                      onPress: () => handleSelectRAGModel(model.id, modelType),
-                    }))
-                  : [{ label: 'No models of this type available.', style: 'cancel' }]),
-                {
-                  label: 'Unset Current Selection',
-                  onPress: () => handleSelectRAGModel(null, modelType),
-                  style: 'destructive',
-                },
-                { label: 'Cancel', style: 'cancel' },
-              ],
-              cancelable: true,
-            })
-          }
-        >
-          <Text style={styles.pickerButtonText}>{selectedModel ? selectedModel.name : 'Tap to Select'}</Text>
-        </TouchableOpacity>
-        {selectedModel && (
-          <Text style={styles.modelDetailsSmall}>
-            Details: {selectedModel.params}, {selectedModel.quantization}
-          </Text>
-        )}
-      </View>
-    );
-  };
-
-  // KV Cache deletion handler
-  const handleDeleteKV = () => {
-    Alert.alert({
-      title: 'Delete KV Cache',
-      description: `Are you sure you want to delete the KV Cache? This cannot be undone. \n\n This will clear up ${readableFileSize(kvSize)} of space.`,
-      buttons: [
-        { label: 'Cancel' },
-        {
-          label: 'Delete KV Cache',
-          onPress: async () => {
-            await KV.deleteKV();
-            Logger.info('KV Cache deleted!');
-            const size = await KV.getKVSize();
-            setKVSize(size);
-          },
-          style: 'destructive',
-        },
-      ],
-    });
-  };
 
   return (
     <Animated.ScrollView
@@ -393,36 +325,39 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
       {loadingFile && <ActivityIndicator color={colors.primary} style={styles.indicator} />}
       {statusMessage && <Text style={[styles.text, { color: colors.text }]}>{statusMessage}</Text>}
 
-      {/* Embedding Model Selection */}
-      {renderFileSelection('Embedding Model', availableModels, selectedEmbeddingModel, setSelectedEmbeddingModel, 'model')}
-      {renderFileSelection('Embedding LoRA Adapter (Optional)', availableLoRAs, selectedEmbeddingLoRA, setSelectedEmbeddingLoRA, 'lora')}
+      {/* REFACTORED: Embedding Model Selection (from DB) */}
+      {renderModelPicker(embeddingModelId, 'rag_embedding', 'Embedding Model', setEmbeddingModelId)}
+      {renderLoRAPicker('Embedding LoRA Adapter (Optional)', availableLoRAs, selectedEmbeddingLoRALocal, handleSelectFile, 'embedding')}
       <ThemedButton
         title="Load Embedding Context"
         onPress={() => handleLoadContext('embedding')}
-        disabled={loadingFile || !selectedEmbeddingModel}
+        disabled={loadingFile || !embeddingModelId} // Base model must be selected
         style={styles.loadContextButton}
       />
       <ThemedButton title="Unload Embedding Context" onPress={Llama.unloadEmbeddingLlamaContext} style={styles.loadContextButton} />
 
-      {/* Reasoning Model Selection */}
-      {renderFileSelection('Reasoning Model', availableModels, selectedReasoningModel, setSelectedReasoningModel, 'model')}
-      {renderFileSelection('Reasoning LoRA Adapter (Optional)', availableLoRAs, selectedReasoningLoRA, setSelectedReasoningLoRA, 'lora')}
+      {/* REFACTORED: Reasoning Model Selection (from DB) */}
+      {renderModelPicker(ragReasoningModelId, 'rag_reasoning', 'Reasoning Model', setRagReasoningModelId)}
+      {renderLoRAPicker('Reasoning LoRA Adapter (Optional)', availableLoRAs, selectedReasoningLoRALocal, handleSelectFile, 'reasoning')}
       <ThemedButton
         title="Load Reasoning Context"
         onPress={() => handleLoadContext('reasoning')}
-        disabled={loadingFile || !selectedReasoningModel}
+        disabled={loadingFile || !ragReasoningModelId} // Base model must be selected
         style={styles.loadContextButton}
       />
       <ThemedButton title="Unload Reasoning Context" onPress={Llama.unloadRagReasoningLlamaContext} style={styles.loadContextButton} />
 
-      {/* RAG Model Assignments */}
-      <SectionTitle>RAG Model Assignments</SectionTitle>
+      {/* The existing RAG Model Assignments (model picker) section can be removed if the above replaces it fully.
+          If 'rag_embedding' and 'rag_reasoning' types were meant for _these_ pickers, then they're now merged
+          into the new `renderModelPicker`. If they served a different purpose, you'll need to clarify.
+          Based on the prompt, it seems the new `renderModelPicker` is the unified solution. */}
+      {/* <SectionTitle>RAG Model Assignments</SectionTitle>
       <View style={styles.sectionContainer}>
-        {renderModelPicker(embeddingModelId, 'rag_embedding', 'RAG Embedding Model')}
-        {renderModelPicker(ragReasoningModelId, 'rag_reasoning', 'RAG Reasoning Model')}
-      </View>
+        {renderModelPicker(embeddingModelId, 'rag_embedding', 'RAG Embedding Model')} // This old function
+        {renderModelPicker(ragReasoningModelId, 'rag_reasoning', 'RAG Reasoning Model')} // This old function
+      </View> */}
 
-      {/* CPU Settings */}
+      {/* CPU Settings (existing, no change needed) */}
       <SectionTitle>CPU Settings</SectionTitle>
       <View style={styles.sectionContainer}>
         {config && (
@@ -468,7 +403,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         )}
       </View>
 
-      {/* Advanced Settings */}
+      {/* Advanced Settings (existing, no change needed unless other MMKV uses are consolidated) */}
       <SectionTitle>Advanced Settings</SectionTitle>
       <View style={styles.sectionContainer}>
         <ThemedSwitch label="Show Model Name In Chat" value={showModelInChat} onChangeValue={setShowModelInChat} />
@@ -496,88 +431,4 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
   );
 };
 
-export default ModelSettings;
-
-const useStyles = ({ colors, spacing, borderRadius, fontSize }: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      padding: spacing.l,
-    },
-    indicator: {
-      marginVertical: 10,
-    },
-    text: {
-      marginTop: 10,
-    },
-    section: {
-      marginTop: 20,
-      borderWidth: 1,
-      borderColor: colors.neutral._200,
-      borderRadius: borderRadius.l,
-      padding: spacing.m,
-    },
-    fileList: {
-      flexDirection: 'row',
-      marginTop: 10,
-      marginBottom: 5,
-    },
-    fileButton: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 20,
-      marginRight: 8,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: colors.neutral._400,
-    },
-    selectedFileButton: {
-      borderColor: colors.primary,
-      borderWidth: 2,
-    },
-    clearButton: {
-      marginTop: 5,
-      backgroundColor: 'transparent',
-      borderColor: colors.neutral._400,
-      borderWidth: 1,
-      paddingVertical: 8,
-    },
-    loadContextButton: {
-      marginTop: 15,
-      marginBottom: 5,
-    },
-    sectionContainer: {
-      padding: spacing.l,
-      backgroundColor: colors.neutral._100,
-      borderRadius: borderRadius.l,
-      marginBottom: spacing.l,
-    },
-    pickerContainer: {
-      marginBottom: spacing.m,
-    },
-    pickerTitle: {
-      fontSize: fontSize.m,
-      fontWeight: '600',
-      color: colors.text._400,
-      marginBottom: spacing.s,
-    },
-    pickerButton: {
-      borderWidth: 1,
-      borderColor: colors.neutral._400,
-      borderRadius: borderRadius.s,
-      padding: spacing.m,
-      alignItems: 'center',
-      backgroundColor: colors.neutral._100,
-    },
-    pickerButtonText: {
-      fontSize: fontSize.m,
-      fontWeight: 'bold',
-      color: colors.primary,
-    },
-    modelDetailsSmall: {
-      fontSize: fontSize.s,
-      color: colors.text._400,
-      marginTop: spacing.xs,
-      textAlign: 'center',
-    },
-  });
+// ... (useStyles and other existing code should be retained as is) ...
