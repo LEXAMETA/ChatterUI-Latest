@@ -1,3 +1,5 @@
+// app/index.tsx (Refined useEffect for auto-load)
+
 import HeaderTitle from '@components/views/HeaderTitle'
 import { db } from '@db'
 import { AntDesign } from '@expo/vector-icons'
@@ -25,7 +27,7 @@ const Home = () => {
   const styles = useStyles()
   const { success, error } = useMigrations(db, migrations)
   const { authorized, retry } = useLocalAuth()
-  const [firstRender, setFirstRender] = useState(true)
+  const [appReady, setAppReady] = useState(false) // New state to track overall app readiness
 
   const [autoLoadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal)
   const {
@@ -40,44 +42,51 @@ const Home = () => {
     setLoadProgress: state.setLoadProgress,
   }))
 
-  // Load chat on auth + migration success
+  // Combined startup effect for migrations, authentication, and auto-load
   useEffect(() => {
-    if (authorized && success) {
-      loadChatOnInit()
-    }
-  }, [authorized, success])
+    const initApp = async () => {
+      // Wait for migrations and authentication
+      if (!success || !authorized) {
+        // If not ready, don't proceed with app startup or auto-load
+        // and keep splash screen visible.
+        return;
+      }
 
-  // Startup routine after migration success
-  useEffect(() => {
-    if (success) {
-      startupApp()
-      setFirstRender(false)
-    }
-  }, [success])
+      // Perform initial app setup tasks (e.g., loading app-wide configs)
+      startupApp(); // This is your existing startupApp utility
 
-  // Auto-load last model if enabled and no model loaded yet
-  useEffect(() => {
-    const handleStartupLoad = async () => {
+      // Auto-load last model if enabled and no model loaded yet
       if (autoLoadLocal && lastModel && !currentChatModel) {
-        Logger.info('Attempting to auto-load last used model...')
-        setLoadProgress(0)
+        Logger.info('Attempting to auto-load last used model...');
+        setLoadProgress(0); // Reset progress if you have a startup progress bar
         try {
-          const success = await loadCurrentChatModel(lastModel)
-          if (success) {
-            Logger.infoToast(`Auto-loaded "${lastModel.name}".`)
+          const loadSuccess = await loadCurrentChatModel(lastModel);
+          if (loadSuccess) {
+            Logger.infoToast(`Auto-loaded "${lastModel.name}".`);
           } else {
-            Logger.errorToast(`Failed to auto-load "${lastModel.name}".`)
+            Logger.errorToast(`Failed to auto-load "${lastModel.name}".`);
           }
-        } catch (error: any) {
-          Logger.errorToast(`Error during auto-load: ${error.message}`)
-          console.error('Auto-load error:', error)
+        } catch (err: any) {
+          Logger.errorToast(`Error during auto-load: ${err.message}`);
+          console.error('Auto-load error:', err);
         }
       }
-      SplashScreen.hideAsync()
-    }
-    handleStartupLoad()
-  }, [autoLoadLocal, lastModel, currentChatModel, loadCurrentChatModel, setLoadProgress])
 
+      // Load chat (if needed, consider if this is separate from auto-load model)
+      // If loadChatOnInit does more than just model loading, keep it.
+      // If it also loads the model, you might need to adjust it to prevent double-loading.
+      // For now, let's assume it handles other chat-related setup.
+      loadChatOnInit();
+
+      // After all core startup logic is done, set app ready and hide splash screen
+      setAppReady(true);
+      SplashScreen.hideAsync();
+    };
+
+    initApp();
+  }, [success, authorized, autoLoadLocal, lastModel, currentChatModel, loadCurrentChatModel, setLoadProgress]); // Depend on all relevant states
+
+  // Rest of your component rendering logic remains the same
   if (error)
     return (
       <View style={styles.centeredContainer}>
@@ -103,9 +112,23 @@ const Home = () => {
       </View>
     )
 
-  if (!firstRender && success) return <CharacterMenu />
+  // Use appReady state to determine when to render main content
+  if (!appReady) {
+    // Or render a custom loading indicator here
+    return (
+      <View style={styles.centeredContainer}>
+        <HeaderTitle />
+        <Text style={styles.title}>Loading App...</Text>
+      </View>
+    );
+  }
 
-  // Default fallback UI with navigation links
+  // Once app is ready, decide what to render (e.g., CharacterMenu or other default screen)
+  // Assuming CharacterMenu is your main entry point after startup.
+  return <CharacterMenu />
+
+  /*
+  // If you prefer to show navigation links instead of CharacterMenu immediately:
   return (
     <View style={styles.container}>
       <HeaderTitle />
@@ -117,6 +140,7 @@ const Home = () => {
       </Link>
     </View>
   )
+  */
 }
 
 export default Home
