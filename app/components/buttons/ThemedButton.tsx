@@ -1,3 +1,5 @@
+// app/components/buttons/ThemedButton.tsx
+
 import TText from '@components/text/TText'
 import { AntDesign } from '@expo/vector-icons'
 import { Theme } from '@lib/theme/ThemeManager'
@@ -10,9 +12,11 @@ import {
     StyleSheet,
     Animated,
     useAnimatedValue,
+    ActivityIndicator, // Import ActivityIndicator
 } from 'react-native'
 
 type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'critical' | 'disabled'
+type ButtonSize = 'small' | 'medium' | 'large'; // Add button size type
 
 interface ThemedButtonProps extends Omit<PressableProps, 'style'> {
     labelStyle?: TextStyle
@@ -24,6 +28,8 @@ interface ThemedButtonProps extends Omit<PressableProps, 'style'> {
     iconSize?: number
     iconStyle?: TextStyle
     icon?: ReactNode
+    showActivityIndicator?: boolean; // New prop for loading spinner
+    size?: ButtonSize; // New prop for button size
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -33,8 +39,46 @@ type ButtonTheme = {
     labelStyle: TextStyle
 }
 
-const useButtonTheme = (variant: ButtonVariant): ButtonTheme => {
+const useButtonTheme = (variant: ButtonVariant, size: ButtonSize): ButtonTheme => { // Pass size to useButtonTheme
     const theme = Theme.useTheme()
+
+    const getPaddingVertical = () => {
+        switch (size) {
+            case 'small': return theme.spacing.s;
+            case 'large': return theme.spacing.l;
+            default: return theme.spacing.m;
+        }
+    };
+
+    const getPaddingHorizontal = () => {
+        switch (size) {
+            case 'small': return theme.spacing.m;
+            case 'large': return theme.spacing.xl2;
+            default: return theme.spacing.xl;
+        }
+    };
+
+    const getFontSize = () => {
+        switch (size) {
+            case 'small': return theme.fontSize.s;
+            case 'large': return theme.fontSize.xl;
+            default: return theme.fontSize.m;
+        }
+    };
+
+    const baseButtonStyle = {
+        borderWidth: theme.borderWidth.m,
+        paddingVertical: getPaddingVertical(),
+        paddingHorizontal: getPaddingHorizontal(),
+        borderRadius: theme.borderRadius.m,
+    };
+
+    const baseLabelStyle = {
+        textAlign: 'center' as 'center', // Explicitly type for StyleSheet
+        fontSize: getFontSize(),
+    };
+
+
     //TODO:
     // Have a lightness checker to figure out whether or not to use light or dark text
     switch (variant) {
@@ -42,68 +86,56 @@ const useButtonTheme = (variant: ButtonVariant): ButtonTheme => {
         case 'primary':
             return {
                 buttonStyle: {
+                    ...baseButtonStyle,
                     backgroundColor: theme.color.primary._500,
                     borderColor: theme.color.primary._100,
-                    borderWidth: theme.borderWidth.m,
-                    paddingVertical: theme.spacing.m,
-                    paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
                 },
                 labelStyle: {
-                    textAlign: 'center',
+                    ...baseLabelStyle,
                     color: theme.color.text._900,
                 },
             }
         case 'secondary':
             return {
                 buttonStyle: {
+                    ...baseButtonStyle,
                     borderColor: theme.color.primary._400,
-                    borderWidth: theme.borderWidth.m,
-                    paddingVertical: theme.spacing.m,
-                    paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
                 },
                 labelStyle: {
-                    textAlign: 'center',
+                    ...baseLabelStyle,
                     color: theme.color.primary._700,
                 },
             }
         case 'tertiary':
             return {
                 buttonStyle: {
-                    borderWidth: theme.borderWidth.m,
+                    ...baseButtonStyle,
                     borderColor: 'rgba(0, 0, 0, 0)',
                 },
                 labelStyle: {
-                    textAlign: 'center',
+                    ...baseLabelStyle,
                     color: theme.color.text._200,
                 },
             }
         case 'critical':
             return {
                 buttonStyle: {
+                    ...baseButtonStyle,
                     borderColor: theme.color.error._400,
-                    borderWidth: theme.borderWidth.m,
-                    paddingVertical: theme.spacing.m,
-                    paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
                 },
                 labelStyle: {
-                    textAlign: 'center',
+                    ...baseLabelStyle,
                     color: theme.color.error._400,
                 },
             }
         case 'disabled':
             return {
                 buttonStyle: {
+                    ...baseButtonStyle,
                     borderColor: theme.color.neutral._500,
-                    borderWidth: theme.borderWidth.m,
-                    paddingVertical: theme.spacing.m,
-                    paddingHorizontal: theme.spacing.xl,
-                    borderRadius: theme.borderRadius.m,
                 },
                 labelStyle: {
-                    textAlign: 'center',
+                    ...baseLabelStyle,
                     color: theme.color.neutral._500,
                 },
             }
@@ -123,10 +155,12 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
     iconSize = 20,
     iconStyle = undefined,
     icon = undefined,
+    showActivityIndicator = false, // Default to false
+    size = 'medium', // Default to medium
     ...rest
 }) => {
     const animOpacity = useAnimatedValue(1)
-    const theme = useButtonTheme(variant)
+    const theme = useButtonTheme(variant, size) // Pass size to useButtonTheme
     const handlePressIn = () => {
         animOpacity.setValue(0.4)
     }
@@ -141,7 +175,7 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
 
     return (
         <AnimatedPressable
-            disabled={variant === 'disabled'}
+            disabled={variant === 'disabled' || rest.disabled || showActivityIndicator} // Disable button if loading
             onPressIn={(event) => {
                 handlePressIn()
                 if (onPressIn) onPressIn(event)
@@ -162,18 +196,27 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
                 },
                 buttonStyle,
             ])}>
-            {!icon && iconName && (
-                <AntDesign
-                    name={iconName}
-                    size={iconSize}
-                    style={iconStyle}
+            {showActivityIndicator ? (
+                <ActivityIndicator
+                    size={iconSize || (size === 'small' ? 'small' : 'large')} // Adjust spinner size based on button size
                     color={theme.labelStyle.color}
                 />
+            ) : (
+                <>
+                    {!icon && iconName && (
+                        <AntDesign
+                            name={iconName}
+                            size={iconSize}
+                            style={iconStyle}
+                            color={theme.labelStyle.color}
+                        />
+                    )}
+                    {icon}
+                </>
             )}
-            {icon}
             {label && <TText style={[theme.labelStyle, labelStyle]}>{label}</TText>}
         </AnimatedPressable>
     )
 }
 
-export default ThemedButton
+export default ThemedButton;
