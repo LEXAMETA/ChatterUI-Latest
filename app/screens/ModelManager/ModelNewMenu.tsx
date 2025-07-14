@@ -5,6 +5,7 @@ import { Model } from '@lib/engine/Local/Model'; // Assuming Model.importModel a
 import { useState, useRef } from 'react'; // Import useRef
 import { View, Alert, Platform } from 'react-native'; // Import Alert and Platform
 import { ModelType } from 'db/schema'; // Import ModelType from your schema
+import { Logger } from '@lib/state/Logger'; // Import Logger
 
 type ModelNewMenuProps = {
     modelImporting: boolean;
@@ -74,8 +75,19 @@ const ModelNewMenu: React.FC<ModelNewMenuProps> = ({ modelImporting, setModelImp
 
         showModelTypeSelection(async (modelType) => {
             setModelImporting(true);
-            await Model.linkModelExternal(modelType); // Pass the modelType
-            setModelImporting(false);
+            try {
+                const success = await Model.linkModelExternal(modelType); // Pass the modelType
+                if (success) {
+                    Logger.infoToast(`Model linked successfully as '${modelType}'.`);
+                } else {
+                    Logger.errorToast(`Failed to link model as '${modelType}'.`);
+                }
+            } catch (error: any) {
+                Logger.errorToast(`Error linking model: ${error.message}`);
+                console.error("Error linking model:", error);
+            } finally {
+                setModelImporting(false);
+            }
         });
     };
 
@@ -85,8 +97,19 @@ const ModelNewMenu: React.FC<ModelNewMenuProps> = ({ modelImporting, setModelImp
 
         showModelTypeSelection(async (modelType) => {
             setModelImporting(true);
-            await Model.importModel(modelType); // Pass the modelType
-            setModelImporting(false);
+            try {
+                const success = await Model.importModel(modelType); // Pass the modelType
+                if (success) {
+                    Logger.infoToast(`Model imported successfully as '${modelType}'.`);
+                } else {
+                    Logger.errorToast(`Failed to import model as '${modelType}'.`);
+                }
+            } catch (error: any) {
+                Logger.errorToast(`Error importing model: ${error.message}`);
+                console.error("Error importing model:", error);
+            } finally {
+                setModelImporting(false);
+            }
         });
     };
 
