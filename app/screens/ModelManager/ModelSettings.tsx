@@ -1,434 +1,492 @@
 // app/screens/ModelManager/ModelSettings.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Platform,
-  BackHandler,
-} from 'react-native';
-import Animated, { Easing, SlideInRight, SlideOutRight } from 'react-native-reanimated';
-import { useFocusEffect } from 'expo-router';
-// import { useMMKVBoolean } from 'react-native-mmkv'; // No longer needed for specific LoRA keys, but might be for SaveLocalKV etc.
+import ThemedButton from '@components/buttons/ThemedButton';
+import PopupMenu from '@components/views/PopupMenu';
+import { Llama } from '@lib/engine/Local/LlamaLocal';
+import { ModelDataType } from 'db/schema';
+import { Model } from '@lib/engine/Local/Model'; // Make sure Model namespace is imported
+import { Theme } from '@lib/theme/ThemeManager';
+import { readDirectoryAsync, getInfoAsync } from 'expo-file-system';
+import { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Alert, Platform } from 'react-native';
+import { Switch } from 'react-native-gesture-handler'; // Assuming you use this for switches
 
-import { SectionTitle } from '../../components/text/SectionTitle';
-import ThemedButton from '../../components/buttons/ThemedButton';
-import ThemedSlider from '../../components/input/ThemedSlider';
-import ThemedSwitch from '../../components/input/ThemedSwitch';
-
-import { useTheme } from '../../lib/theme/ThemeManager';
-import { pickFile, copyFileToAppDirectory } from '../../lib/utils/File';
-import { Llama, useEngineData } from '../../lib/engine/Local/LlamaLocal'; // Import Llama and useEngineData
-import { KV } from '../../lib/engine/Local/Model'; // Assuming KV is still needed for cache management
-import { Logger } from '../../lib/state/Logger';
-import { readableFileSize } from '../../lib/utils/File';
-import { ModelDataType } from 'db/schema'; // Ensure correct import for ModelDataType
-import * as FileSystem from 'expo-file-system'; // Ensure FileSystem is imported
-
-// Interface for files picked from the system, distinct from DB models
-interface FileEntry {
-  name: string;
-  uri: string;
-}
+import { AppSettings } from '../../constants/GlobalValues';
+import { Logger } from '../../state/Logger';
+import { useMMKVBoolean } from '../../storage/MMKV'; // Keep relevant MMKV hooks
 
 type ModelSettingsProps = {
-  modelImporting: boolean;
-  modelLoading: boolean;
-  exit: () => void;
-  models: ModelDataType[]; // This prop now holds all your DB-backed models
-  setEmbeddingModelId: (id: number | null) => void;
-  setRagReasoningModelId: (id: number | null) => void;
-  embeddingModelId: number | null | undefined;
-  ragReasoningModelId: number | null | undefined;
+    exit: () => void;
+    modelImporting: boolean;
+    modelLoading: boolean;
+    models: ModelDataType[]; // All models from the database
+    embeddingModelId: number | null | undefined;
+    ragReasoningModelId: number | null | undefined;
+    setEmbeddingModelId: (id: number | null) => void;
+    setRagReasoningModelId: (id: number | null) => void;
+};
+
+// Type for local file entries (used for LoRAs)
+type FileEntry = {
+    name: string;
+    uri: string;
+    size: number;
 };
 
 const ModelSettings: React.FC<ModelSettingsProps> = ({
-  modelImporting,
-  modelLoading,
-  exit,
-  models, // Now actively used for base model selection
-  setEmbeddingModelId,
-  setRagReasoningModelId,
-  embeddingModelId,
-  ragReasoningModelId,
+    exit,
+    modelImporting,
+    modelLoading,
+    models, // All models from the database
+    embeddingModelId,
+    ragReasoningModelId,
+    setEmbeddingModelId,
+    setRagReasoningModelId,
 }) => {
-  const { colors, spacing, borderRadius, fontSize } = useTheme();
-  const styles = useStyles({ colors, spacing, borderRadius, fontSize });
+    const styles = useStyles();
+    const { color, spacing } = Theme.useTheme();
 
-  const [loadingFile, setLoadingFile] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+    const [availableLoRAs, setAvailableLoRAs] = useState<FileEntry[]>([]);
+    const [selectedEmbeddingLoRALocal, setSelectedEmbeddingLoRALocal] = useState<FileEntry | null>(null);
+    const [selectedReasoningLoRALocal, setSelectedReasoningLoRALocal] = useState<FileEntry | null>(null);
 
-  // No longer need availableModels, as base models come from the 'models' prop
-  const [availableLoRAs, setAvailableLoRAs] = useState<FileEntry[]>([]);
+    // Get LoRA URIs from Zustand (LlamaLocal.ts)
+    const { selectedEmbeddingLoRAUri, selectedReasoningLoRAUri, setSelectedEmbeddingLoRAUri, setSelectedReasoningLoRAUri } = Llama.useEngineData(state => ({
+        selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
+        selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
+        setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
+        setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
+    }));
 
-  // Use Zustand store for persistent LoRA selection
-  const {
-    selectedEmbeddingLoRAUri,
-    setSelectedEmbeddingLoRAUri,
-    selectedReasoningLoRAUri,
-    setSelectedReasoningLoRAUri,
-    config, // Retain config for CPU settings
-    setConfiguration: setConfig, // Retain setConfig for CPU settings
-  } = useEngineData((state) => ({
-    selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
-    setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
-    selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
-    setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
-    config: state.config,
-    setConfiguration: state.setConfiguration,
-  }));
+    // MMKV states for general settings
+    const [saveLocalKV, setSaveLocalKV] = useMMKVBoolean(AppSettings.SaveLocalKV);
+    const [autoLoadLocal, setAutoLoadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal);
+    const [showModelInChat, setShowModelInChat] = useMMKVBoolean(AppSettings.ShowModelInChat);
 
-  // Local state to track which FileEntry corresponds to the persistent LoRA URI
-  const [selectedEmbeddingLoRALocal, setSelectedEmbeddingLoRALocal] = useState<FileEntry | null>(null);
-  const [selectedReasoningLoRALocal, setSelectedReasoningLoRALocal] = useState<FileEntry | null>(null);
 
-  // MMKV booleans for other settings (still needed)
-  const [saveKV, setSaveKV] = useMMKVBoolean('SaveLocalKV');
-  const [autoloadLocal, setAutoloadLocal] = useMMKVBoolean('AutoLoadLocal');
-  const [showModelInChat, setShowModelInChat] = useMMKVBoolean('ShowModelInChat');
+    // Effect to load available LoRAs and set initial selections
+    useEffect(() => {
+        const loadLoRAs = async () => {
+            const loraPath = `${Llama.AppDirectory.LoRAPath}`;
+            const info = await getInfoAsync(loraPath);
+            if (!info.exists) {
+                await Llama.FileSystem.makeDirectoryAsync(loraPath);
+            }
 
-  const [kvSize, setKVSize] = useState(0);
+            const files = await readDirectoryAsync(loraPath);
+            const loraFiles: FileEntry[] = [];
+            for (const file of files) {
+                const uri = `${loraPath}${file}`;
+                const fileInfo = await getInfoAsync(uri);
+                if (fileInfo.exists && fileInfo.isDirectory === false) {
+                    loraFiles.push({ name: file, uri: uri, size: fileInfo.size });
+                }
+            }
+            setAvailableLoRAs(loraFiles);
 
-  // ... (Existing useEffect for KV size, Android back button handling) ...
+            // Set local selected LoRA states based on persisted URIs
+            if (selectedEmbeddingLoRAUri) {
+                const found = loraFiles.find(l => l.uri === selectedEmbeddingLoRAUri);
+                setSelectedEmbeddingLoRALocal(found || null);
+            } else {
+                setSelectedEmbeddingLoRALocal(null);
+            }
+            if (selectedReasoningLoRAUri) {
+                const found = loraFiles.find(l => l.uri === selectedReasoningLoRAUri);
+                setSelectedReasoningLoRALocal(found || null);
+            } else {
+                setSelectedReasoningLoRALocal(null);
+            }
+        };
+        loadLoRAs();
+    }, [selectedEmbeddingLoRAUri, selectedReasoningLoRAUri]); // Re-run if persisted URIs change
 
-  // --- REFACTORED: Load LoRAs from app storage directory and link to persistent state ---
-  // No longer loading 'models/' directory here, as base models are from DB.
-  useEffect(() => {
-    const loadStoredLoRAsAndSelections = async () => {
-      setLoadingFile(true);
-      try {
-        const loras = await loadFilesFromDirectory('loras/', ['.gguf', '.bin']);
-        setAvailableLoRAs(loras);
+    const handlePickAndCopyFile = async (type: 'lora') => {
+        if (modelImporting || modelLoading) return;
 
-        // Link persistent LoRA URIs to local FileEntry objects
-        if (selectedEmbeddingLoRAUri) {
-          const found = loras.find(l => l.uri === selectedEmbeddingLoRAUri);
-          setSelectedEmbeddingLoRALocal(found || null);
+        const result = await Llama.getDocumentAsync({
+            copyToCacheDirectory: false,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+        const file = result.assets[0];
+        const targetPath = `${Llama.AppDirectory.LoRAPath}${file.name}`; // Always copy to LoRA path
+
+        Logger.infoToast(`Copying ${type} file...`);
+        try {
+            await Llama.FileSystem.copyAsync({
+                from: file.uri,
+                to: targetPath,
+            });
+            // After successful copy, refresh the list of available LoRAs
+            // and update the selected LoRA state
+            const fileInfo = await getInfoAsync(targetPath);
+            if (fileInfo.exists) {
+                const newLoRAEntry: FileEntry = { name: file.name, uri: targetPath, size: fileInfo.size };
+                setAvailableLoRAs(prev => [...prev, newLoRAEntry]);
+                Logger.infoToast(`${type} file copied successfully!`);
+            }
+        } catch (error: any) {
+            Logger.errorToast(`Failed to copy ${type} file: ${error.message}`);
+            console.error(`Error copying ${type} file:`, error);
         }
-        if (selectedReasoningLoRAUri) {
-          const found = loras.find(l => l.uri === selectedReasoningLoRAUri);
-          setSelectedReasoningLoRALocal(found || null);
-        }
-      } catch (error) {
-        Logger.error('Error loading stored LoRAs and selections:', error);
-        setStatusMessage('Error loading stored LoRAs.');
-      } finally {
-        setLoadingFile(false);
-      }
     };
-    loadStoredLoRAsAndSelections();
-  }, [
-    loadFilesFromDirectory,
-    selectedEmbeddingLoRAUri,
-    selectedReasoningLoRAUri,
-  ]); // Dependencies ensure re-run if persistent URIs change
 
-  // ... (Existing loadFilesFromDirectory function, no change needed) ...
-
-  // --- REFACTORED: handlePickAndCopyFile (now primarily for LoRAs or new base model import) ---
-  const handlePickAndCopyFile = async (type: 'model' | 'lora') => {
-    setLoadingFile(true);
-    setStatusMessage(`Picking ${type}...`);
-    try {
-      const fileTypes = type === 'model' ? ['.gguf', 'application/octet-stream'] : ['.gguf', '.bin', 'application/octet-stream'];
-      const subfolder = type === 'model' ? 'models/' : 'loras/'; // Still copy to 'models/' for raw new models
-
-      const fileInfo = await pickFile(fileTypes, true);
-      if (fileInfo) {
-        const destinationFileName = `${subfolder}${fileInfo.name}`;
-        const copiedUri = await copyFileToAppDirectory(fileInfo.uri, destinationFileName);
-
-        if (copiedUri) {
-          setStatusMessage(`${type} '${fileInfo.name}' copied successfully.`);
-          if (type === 'lora') { // Only update availableLoRAs here
-            setAvailableLoRAs((prev) => [...prev, { name: fileInfo.name, uri: copiedUri }]);
-          } else {
-            // If a 'model' is picked directly, it should ideally be added to your DB.
-            // This part is crucial: After copying, you need to add this model to your Drizzle DB
-            // so it can be selected by ID. For now, we'll just log this.
-            Logger.info(`Model file copied: ${copiedUri}. Please ensure it's added to your database.`);
-            Alert.alert("Model Copied", `Model '${fileInfo.name}' copied to app directory. You might need to add it to your model database.`);
-          }
+    const handleSelectFile = (type: 'embedding' | 'reasoning', file: FileEntry | null) => {
+        if (type === 'embedding') {
+            setSelectedEmbeddingLoRALocal(file);
+            setSelectedEmbeddingLoRAUri(file ? file.uri : null);
         } else {
-          setStatusMessage(`Failed to copy ${type} '${fileInfo.name}'.`);
+            setSelectedReasoningLoRALocal(file);
+            setSelectedReasoningLoRAUri(file ? file.uri : null);
         }
-      } else {
-        setStatusMessage(`No ${type} file selected.`);
-      }
-    } catch (e: any) {
-      Logger.error(`Error picking or copying ${type}:`, e);
-      setStatusMessage(`Error: ${e.message}`);
-    } finally {
-      setLoadingFile(false);
-    }
-  };
+    };
 
-  // --- REFACTORED: handleSelectFile (now only for LoRAs) ---
-  const handleSelectFile = useCallback((file: FileEntry | null, fileType: 'lora', contextType: 'embedding' | 'reasoning') => {
-    if (fileType === 'lora') { // Ensure it's explicitly a LoRA selection
-      if (contextType === 'embedding') {
-        setSelectedEmbeddingLoRALocal(file);
-        setSelectedEmbeddingLoRAUri(file ? file.uri : null);
-      } else {
-        setSelectedReasoningLoRALocal(file);
-        setSelectedReasoningLoRAUri(file ? file.uri : null);
-      }
-    }
-  }, [setSelectedEmbeddingLoRAUri, setSelectedReasoningLoRAUri]);
+    const handleLoadContext = async (contextType: 'embedding' | 'reasoning') => {
+        if (modelLoading || modelImporting) return;
 
-  // --- REFACTORED: handleLoadContext (uses DB model ID and LoRA URI) ---
-  const handleLoadContext = async (contextType: 'embedding' | 'reasoning') => {
-    setLoadingFile(true);
-    setStatusMessage(`Loading ${contextType} context...`);
-    try {
-      let modelIdToLoad: number | null | undefined;
-      let loraUriToLoad: string | null;
-      let selectedModelData: ModelDataType | undefined;
+        let modelIdToLoad: number | null | undefined;
+        let loraUriToLoad: string | null;
+        let setModelIdFunc: (id: number | null) => void;
+        let getLlamaContextFunc: (loraPath: string | null) => Promise<Llama.LlamaContext | null>;
+        let modelTypeName: ModelDataType['model_type'];
 
-      if (contextType === 'embedding') {
-        modelIdToLoad = embeddingModelId;
-        loraUriToLoad = selectedEmbeddingLoRAUri;
-        selectedModelData = models.find(m => m.id === embeddingModelId); // Get model data from prop
-      } else {
-        modelIdToLoad = ragReasoningModelId;
-        loraUriToLoad = selectedReasoningLoRAUri;
-        selectedModelData = models.find(m => m.id === ragReasoningModelId); // Get model data from prop
-      }
+        if (contextType === 'embedding') {
+            modelIdToLoad = embeddingModelId;
+            loraUriToLoad = selectedEmbeddingLoRALocal?.uri || null;
+            setModelIdFunc = setEmbeddingModelId;
+            getLlamaContextFunc = Llama.getEmbeddingLlamaContext;
+            modelTypeName = 'rag_embedding';
+        } else { // 'reasoning'
+            modelIdToLoad = ragReasoningModelId;
+            loraUriToLoad = selectedReasoningLoRALocal?.uri || null;
+            setModelIdFunc = setRagReasoningModelId;
+            getLlamaContextFunc = Llama.getRagReasoningLlamaContext;
+            modelTypeName = 'rag_reasoning';
+        }
 
-      if (!modelIdToLoad || !selectedModelData) {
-        Alert.alert('Error', `Please select a base model for the ${contextType} context.`);
-        setStatusMessage(`Failed to load ${contextType} context.`);
-        return;
-      }
+        if (!modelIdToLoad) {
+            Alert.alert("No Base Model Selected", `Please select a ${modelTypeName} base model first.`);
+            return;
+        }
 
-      // Pass the model ID and LoRA URI directly to LlamaLocal functions
-      if (contextType === 'embedding') {
-        await Llama.getEmbeddingLlamaContext(modelIdToLoad, loraUriToLoad);
-      } else {
-        await Llama.getRagReasoningLlamaContext(modelIdToLoad, loraUriToLoad);
-      }
+        // Find the full ModelDataType object using the ID
+        const baseModel = models.find(m => m.id === modelIdToLoad);
+        if (!baseModel) {
+            Alert.alert("Model Not Found", `Selected base model (ID: ${modelIdToLoad}) not found in database. Please re-select.`);
+            setModelIdFunc(null); // Clear invalid ID
+            return;
+        }
 
-      setStatusMessage(`${contextType} context loaded successfully!`);
-      Alert.alert(
-        'Success',
-        `${contextType} context loaded with ${selectedModelData.name}` + (loraUriToLoad ? ` and LoRA ${selectedEmbeddingLoRALocal?.name || selectedReasoningLoRALocal?.name}` : '')
-      );
-    } catch (e: any) {
-      Logger.error(`Error loading ${contextType} context:`, e);
-      setStatusMessage(`Failed to load ${contextType} context: ${e.message}`);
-      Alert.alert('Error', `Failed to load ${contextType} context: ${e.message}`);
-    } finally {
-      setLoadingFile(false);
-    }
-  };
+        // Check if the selected model matches the expected type
+        if (baseModel.model_type !== modelTypeName) {
+            Alert.alert(
+                "Incorrect Model Type",
+                `The selected model "${baseModel.name}" is of type "${baseModel.model_type}", but a "${modelTypeName}" model is required here. Please select a correct model type.`,
+            );
+            return;
+        }
 
-  // --- NEW: Render Model Picker (for DB-backed base models) ---
-  const renderModelPicker = (
-    currentId: number | null | undefined,
-    contextType: 'rag_embedding' | 'rag_reasoning' | 'main_chat', // Add main_chat if needed elsewhere
-    title: string,
-    onSelectId: (id: number | null) => void // Setter for embeddingModelId or ragReasoningModelId
-  ) => {
-    const filteredModels = models.filter(m => m.model_type === contextType);
-    const selectedModelName = filteredModels.find(m => m.id === currentId)?.name;
+        setModelLoading(true); // Signal global loading
+        try {
+            // LlamaLocal.ts `get...LlamaContext` functions now handle model lookup by ID internally
+            // and manage their own global contexts. We just need to trigger the load.
+            const context = await getLlamaContextFunc(loraUriToLoad);
+            if (context) {
+                Logger.infoToast(`${baseModel.name} (${modelTypeName}) loaded with ${loraUriToLoad ? 'LoRA' : 'no LoRA'}.`);
+            } else {
+                Logger.errorToast(`Failed to load ${modelTypeName} model.`);
+            }
+        } catch (error: any) {
+            Logger.errorToast(`Error loading ${modelTypeName} model: ${error.message}`);
+            console.error(`Error loading ${modelTypeName} model:`, error);
+        } finally {
+            setModelLoading(false); // Signal global loading finished
+        }
+    };
+
+    const handleUnloadContext = async (contextType: 'embedding' | 'reasoning') => {
+        if (modelLoading || modelImporting) return;
+
+        setModelLoading(true); // Indicate unloading
+        try {
+            if (contextType === 'embedding') {
+                await Llama.unloadEmbeddingLlamaContext();
+            } else {
+                await Llama.unloadRagReasoningLlamaContext();
+            }
+            Logger.infoToast(`${contextType} model unloaded.`);
+        } catch (error: any) {
+            Logger.errorToast(`Failed to unload ${contextType} model: ${error.message}`);
+        } finally {
+            setModelLoading(false); // Signal unloading finished
+        }
+    };
+
+
+    const renderModelPicker = (
+        currentModelId: number | null | undefined,
+        contextType: ModelDataType['model_type'], // e.g., 'rag_embedding', 'rag_reasoning'
+        title: string,
+        onSelectId: (id: number | null) => void,
+        loadedContextModel: ModelDataType | undefined // From LlamaLocal.ts (if context is currently active)
+    ) => {
+        const filteredModels = models.filter(m => m.model_type === contextType);
+        const selectedModel = filteredModels.find(m => m.id === currentModelId);
+        const isModelLoaded = loadedContextModel?.id === currentModelId;
+
+        const disabled = modelLoading || modelImporting;
+
+        return (
+            <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>{title} Base Model</Text>
+                <PopupMenu
+                    placement="top" // Or "bottom", depending on preferred UX
+                    icon="caretdown" // Placeholder, you might want a more fitting icon
+                    disabled={disabled}
+                    options={
+                        filteredModels.length > 0
+                            ? filteredModels.map((model) => ({
+                                label: model.name,
+                                onPress: () => onSelectId(model.id),
+                            }))
+                            : [{ label: 'No models of this type available', onPress: () => { } }]
+                    }
+                >
+                    <View style={styles.selectionDisplay}>
+                        <Text style={styles.selectionText}>
+                            {selectedModel ? selectedModel.name : 'Select a model'}
+                        </Text>
+                        {selectedModel && isModelLoaded && (
+                            <Text style={styles.loadedStatus}> (Active)</Text>
+                        )}
+                        {disabled && <ActivityIndicator size="small" color={color.text._300} style={{ marginLeft: spacing.s }} />}
+                    </View>
+                </PopupMenu>
+                {selectedModel && (
+                    <Text style={styles.selectedModelInfo}>
+                        Type: {selectedModel.model_type} | Quant: {Model.GGMLNameMap[parseInt(selectedModel.quantization) as Llama.GGMLType]} | Size: {Llama.readableFileSize(selectedModel.file_size)}
+                    </Text>
+                )}
+            </View>
+        );
+    };
+
+    const renderLoRAPicker = (
+        selectedFile: FileEntry | null,
+        title: string,
+        onSelect: (file: FileEntry | null) => void,
+    ) => {
+        const disabled = modelLoading || modelImporting;
+        return (
+            <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>{title} LoRA Adapter</Text>
+                <PopupMenu
+                    placement="top"
+                    icon="caretdown"
+                    disabled={disabled}
+                    options={[
+                        ...(availableLoRAs.length > 0
+                            ? availableLoRAs.map((file) => ({
+                                label: file.name,
+                                onPress: () => onSelect(file),
+                            }))
+                            : []),
+                        { label: '--- Clear LoRA ---', onPress: () => onSelect(null), icon: 'close' },
+                        { label: 'Import New LoRA File', onPress: () => handlePickAndCopyFile('lora'), icon: 'pluscircleo' },
+                    ]}
+                >
+                    <View style={styles.selectionDisplay}>
+                        <Text style={styles.selectionText}>
+                            {selectedFile ? selectedFile.name : 'No LoRA selected'}
+                        </Text>
+                        {disabled && <ActivityIndicator size="small" color={color.text._300} style={{ marginLeft: spacing.s }} />}
+                    </View>
+                </PopupMenu>
+                {selectedFile && (
+                    <Text style={styles.selectedModelInfo}>
+                        Size: {Llama.readableFileSize(selectedFile.size)}
+                    </Text>
+                )}
+            </View>
+        );
+    };
+
+    // Get currently loaded RAG models from LlamaLocal's internal state
+    const currentEmbeddingContextModel = Llama.useLlama.getState().loadedEmbeddingModel;
+    const currentReasoningContextModel = Llama.useLlama.getState().loadedRagReasoningModel;
 
     return (
-      <View style={styles.section}>
-        <SectionTitle title={title} />
-        {selectedModelName && <Text style={[styles.text, { color: colors.text }]}>Selected: {selectedModelName}</Text>}
-        <ScrollView horizontal style={styles.fileList}>
-          {filteredModels.length > 0 ? (
-            filteredModels.map((model) => (
-              <ThemedButton
-                key={model.id}
-                title={model.name}
-                onPress={() => onSelectId(model.id)}
-                style={[
-                  styles.fileButton,
-                  currentId === model.id && styles.selectedFileButton,
-                  { backgroundColor: currentId === model.id ? colors.primary : colors.cardBackground },
-                ]}
-                textStyle={{ color: currentId === model.id ? colors.buttonText : colors.text }}
-              />
-            ))
-          ) : (
-            <Text style={[styles.text, { color: colors.textSecondary }]}>No {title.toLowerCase()} models found.</Text>
-          )}
-        </ScrollView>
-        {currentId !== null && (
-          <ThemedButton
-            title={`Clear Selected ${title}`}
-            onPress={() => onSelectId(null)}
-            style={styles.clearButton}
-            textStyle={{ color: colors.text }}
-          />
-        )}
-      </View>
-    );
-  };
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            <Text style={styles.heading}>RAG Model Configuration</Text>
 
-  // --- REFACTORED: Render LoRA Picker (for file-based LoRAs) ---
-  const renderLoRAPicker = (
-    title: string,
-    files: FileEntry[],
-    selectedFile: FileEntry | null, // This is now the local state for LoRA
-    onSelectFileLocal: (file: FileEntry | null, fileType: 'lora', contextType: 'embedding' | 'reasoning') => void,
-    contextType: 'embedding' | 'reasoning' // Add contextType to differentiate
-  ) => (
-    <View style={styles.section}>
-      <SectionTitle title={title} />
-      <ThemedButton title={`Pick LoRA file`} onPress={() => handlePickAndCopyFile('lora')} disabled={loadingFile} />
-      {selectedFile && <Text style={[styles.text, { color: colors.text }]}>Selected: {selectedFile.name}</Text>}
-      <ScrollView horizontal style={styles.fileList}>
-        {files.length > 0 ? (
-          files.map((file, index) => (
-            <ThemedButton
-              key={index}
-              title={file.name}
-              onPress={() => onSelectFileLocal(file, 'lora', contextType)} // Use the new wrapper
-              style={[
-                styles.fileButton,
-                selectedFile?.uri === file.uri && styles.selectedFileButton,
-                { backgroundColor: selectedFile?.uri === file.uri ? colors.primary : colors.cardBackground },
-              ]}
-              textStyle={{ color: selectedFile?.uri === file.uri ? colors.buttonText : colors.text }}
-            />
-          ))
-        ) : (
-          <Text style={[styles.text, { color: colors.textSecondary }]}>No LoRA files found. Pick one to get started!</Text>
-        )}
-      </ScrollView>
-      {selectedFile !== null && (
-        <ThemedButton
-          title={`Clear Selected LoRA`}
-          onPress={() => onSelectFileLocal(null, 'lora', contextType)} // Use the new wrapper
-          style={styles.clearButton}
-          textStyle={{ color: colors.text }}
-        />
-      )}
-    </View>
-  );
-
-  return (
-    <Animated.ScrollView
-      showsVerticalScrollIndicator={false}
-      style={[styles.container, { backgroundColor: colors.background }]}
-      entering={SlideInRight.easing(Easing.inOut(Easing.cubic))}
-      exiting={SlideOutRight.easing(Easing.inOut(Easing.cubic))}
-    >
-      <SectionTitle title="File Management" />
-      {loadingFile && <ActivityIndicator color={colors.primary} style={styles.indicator} />}
-      {statusMessage && <Text style={[styles.text, { color: colors.text }]}>{statusMessage}</Text>}
-
-      {/* REFACTORED: Embedding Model Selection (from DB) */}
-      {renderModelPicker(embeddingModelId, 'rag_embedding', 'Embedding Model', setEmbeddingModelId)}
-      {renderLoRAPicker('Embedding LoRA Adapter (Optional)', availableLoRAs, selectedEmbeddingLoRALocal, handleSelectFile, 'embedding')}
-      <ThemedButton
-        title="Load Embedding Context"
-        onPress={() => handleLoadContext('embedding')}
-        disabled={loadingFile || !embeddingModelId} // Base model must be selected
-        style={styles.loadContextButton}
-      />
-      <ThemedButton title="Unload Embedding Context" onPress={Llama.unloadEmbeddingLlamaContext} style={styles.loadContextButton} />
-
-      {/* REFACTORED: Reasoning Model Selection (from DB) */}
-      {renderModelPicker(ragReasoningModelId, 'rag_reasoning', 'Reasoning Model', setRagReasoningModelId)}
-      {renderLoRAPicker('Reasoning LoRA Adapter (Optional)', availableLoRAs, selectedReasoningLoRALocal, handleSelectFile, 'reasoning')}
-      <ThemedButton
-        title="Load Reasoning Context"
-        onPress={() => handleLoadContext('reasoning')}
-        disabled={loadingFile || !ragReasoningModelId} // Base model must be selected
-        style={styles.loadContextButton}
-      />
-      <ThemedButton title="Unload Reasoning Context" onPress={Llama.unloadRagReasoningLlamaContext} style={styles.loadContextButton} />
-
-      {/* The existing RAG Model Assignments (model picker) section can be removed if the above replaces it fully.
-          If 'rag_embedding' and 'rag_reasoning' types were meant for _these_ pickers, then they're now merged
-          into the new `renderModelPicker`. If they served a different purpose, you'll need to clarify.
-          Based on the prompt, it seems the new `renderModelPicker` is the unified solution. */}
-      {/* <SectionTitle>RAG Model Assignments</SectionTitle>
-      <View style={styles.sectionContainer}>
-        {renderModelPicker(embeddingModelId, 'rag_embedding', 'RAG Embedding Model')} // This old function
-        {renderModelPicker(ragReasoningModelId, 'rag_reasoning', 'RAG Reasoning Model')} // This old function
-      </View> */}
-
-      {/* CPU Settings (existing, no change needed) */}
-      <SectionTitle>CPU Settings</SectionTitle>
-      <View style={styles.sectionContainer}>
-        {config && (
-          <>
-            <ThemedSlider
-              label="Max Context"
-              value={config.context_length}
-              onValueChange={(value) => setConfig({ ...config, context_length: value })}
-              min={1024}
-              max={32768}
-              step={1024}
-              disabled={modelImporting || modelLoading}
-            />
-            <ThemedSlider
-              label="Threads"
-              value={config.threads}
-              onValueChange={(value) => setConfig({ ...config, threads: value })}
-              min={1}
-              max={8}
-              step={1}
-              disabled={modelImporting || modelLoading}
-            />
-            <ThemedSlider
-              label="Batch"
-              value={config.batch}
-              onValueChange={(value) => setConfig({ ...config, batch: value })}
-              min={16}
-              max={512}
-              step={16}
-              disabled={modelImporting || modelLoading}
-            />
-            {Platform.OS === 'ios' && (
-              <ThemedSlider
-                label="GPU Layers"
-                value={config.gpu_layers}
-                onValueChange={(value) => setConfig({ ...config, gpu_layers: value })}
-                min={0}
-                max={100}
-                step={1}
-              />
+            {/* Embedding Model Selection */}
+            {renderModelPicker(
+                embeddingModelId,
+                'rag_embedding',
+                'RAG Embedding',
+                setEmbeddingModelId,
+                currentEmbeddingContextModel
             )}
-          </>
-        )}
-      </View>
+            {renderLoRAPicker(
+                selectedEmbeddingLoRALocal,
+                'RAG Embedding',
+                (file) => handleSelectFile('embedding', file)
+            )}
+            <View style={styles.buttonRow}>
+                <ThemedButton
+                    label={modelLoading && Llama.useLlama.getState().loadedEmbeddingModel?.id === embeddingModelId ? 'Loading...' : 'Load Embedding Context'}
+                    onPress={() => handleLoadContext('embedding')}
+                    disabled={!embeddingModelId || modelLoading || modelImporting}
+                    // Show activity indicator if this specific model is loading
+                    showActivityIndicator={modelLoading && Llama.useLlama.getState().loadedEmbeddingModel?.id === embeddingModelId}
+                    size="small"
+                />
+                <ThemedButton
+                    label={modelLoading && !embeddingModelId ? 'Unloading...' : 'Unload Embedding Context'} // Adjusted label for unloading
+                    onPress={() => handleUnloadContext('embedding')}
+                    disabled={!currentEmbeddingContextModel || modelLoading || modelImporting}
+                    size="small"
+                    type="warning"
+                />
+            </View>
 
-      {/* Advanced Settings (existing, no change needed unless other MMKV uses are consolidated) */}
-      <SectionTitle>Advanced Settings</SectionTitle>
-      <View style={styles.sectionContainer}>
-        <ThemedSwitch label="Show Model Name In Chat" value={showModelInChat} onChangeValue={setShowModelInChat} />
-        <ThemedSwitch label="Automatically Load Model on Chat" value={autoloadLocal} onChangeValue={setAutoloadLocal} />
-        <ThemedSwitch
-          label="Save Local KV"
-          value={saveKV}
-          onChangeValue={setSaveKV}
-          description={
-            saveKV
-              ? ''
-              : 'Saves the KV cache on generations, allowing you to continue sessions after closing the app. Must use the same model for this to function properly. Saving the KV cache file may be very big and negatively impact battery life!'
-          }
-        />
-        {saveKV && (
-          <ThemedButton
-            buttonStyle={{ marginTop: 8 }}
-            label={`Purge KV Cache (${readableFileSize(kvSize)})`}
-            onPress={handleDeleteKV}
-            variant={kvSize === 0 ? 'disabled' : 'critical'}
-          />
-        )}
-      </View>
-    </Animated.ScrollView>
-  );
+
+            {/* Reasoning Model Selection */}
+            {renderModelPicker(
+                ragReasoningModelId,
+                'rag_reasoning',
+                'RAG Reasoning (LLM)',
+                setRagReasoningModelId,
+                currentReasoningContextModel
+            )}
+            {renderLoRAPicker(
+                selectedReasoningLoRALocal,
+                'RAG Reasoning (LLM)',
+                (file) => handleSelectFile('reasoning', file)
+            )}
+            <View style={styles.buttonRow}>
+                <ThemedButton
+                    label={modelLoading && Llama.useLlama.getState().loadedRagReasoningModel?.id === ragReasoningModelId ? 'Loading...' : 'Load Reasoning Context'}
+                    onPress={() => handleLoadContext('reasoning')}
+                    disabled={!ragReasoningModelId || modelLoading || modelImporting}
+                    // Show activity indicator if this specific model is loading
+                    showActivityIndicator={modelLoading && Llama.useLlama.getState().loadedRagReasoningModel?.id === ragReasoningModelId}
+                    size="small"
+                />
+                 <ThemedButton
+                    label={modelLoading && !ragReasoningModelId ? 'Unloading...' : 'Unload Reasoning Context'} // Adjusted label for unloading
+                    onPress={() => handleUnloadContext('reasoning')}
+                    disabled={!currentReasoningContextModel || modelLoading || modelImporting}
+                    size="small"
+                    type="warning"
+                />
+            </View>
+
+            <View style={styles.divider} />
+
+            <Text style={styles.heading}>App Settings</Text>
+
+            {/* General App Settings */}
+            <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Save KV Cache Locally</Text>
+                <Switch value={saveLocalKV} onValueChange={setSaveLocalKV} />
+            </View>
+            <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Auto-Load Main Chat Model on Startup</Text>
+                <Switch value={autoLoadLocal} onValueChange={setAutoLoadLocal} />
+            </View>
+            <View style={styles.settingItem}>
+                <Text style={styles.settingLabel}>Show Model Info in Chat</Text>
+                <Switch value={showModelInChat} onValueChange={setShowModelInChat} />
+            </View>
+
+            <View style={{ height: spacing.xl4 }} /> {/* Spacer */}
+        </ScrollView>
+    );
 };
 
-// ... (useStyles and other existing code should be retained as is) ...
+export default ModelSettings;
+
+const useStyles = () => {
+    const { color, spacing, borderRadius, fontSize } = Theme.useTheme();
+
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            paddingVertical: spacing.l,
+            paddingHorizontal: spacing.xl,
+        },
+        heading: {
+            fontSize: fontSize.xl,
+            fontWeight: 'bold',
+            color: color.text._100,
+            marginBottom: spacing.l,
+            textAlign: 'center',
+        },
+        sectionContainer: {
+            backgroundColor: color.neutral._200,
+            borderRadius: borderRadius.l,
+            padding: spacing.l,
+            marginBottom: spacing.l,
+        },
+        sectionTitle: {
+            fontSize: fontSize.m,
+            fontWeight: 'bold',
+            color: color.text._100,
+            marginBottom: spacing.s,
+        },
+        selectionDisplay: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: color.neutral._300,
+            borderRadius: borderRadius.m,
+            paddingVertical: spacing.s,
+            paddingHorizontal: spacing.m,
+            minHeight: 40,
+        },
+        selectionText: {
+            flex: 1,
+            color: color.text._100,
+            fontSize: fontSize.m,
+        },
+        selectedModelInfo: {
+            fontSize: fontSize.s,
+            color: color.text._400,
+            marginTop: spacing.s,
+            marginLeft: spacing.xs,
+        },
+        loadedStatus: {
+            fontSize: fontSize.m,
+            fontWeight: 'bold',
+            color: color.primary._500, // Or a distinct "active" color
+            marginLeft: spacing.s,
+        },
+        buttonRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            marginBottom: spacing.l,
+            marginTop: spacing.s,
+        },
+        settingItem: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: color.neutral._200,
+            borderRadius: borderRadius.l,
+            padding: spacing.l,
+            marginBottom: spacing.m,
+        },
+        settingLabel: {
+            fontSize: fontSize.m,
+            color: color.text._100,
+            flex: 1,
+        },
+        divider: {
+            height: 1,
+            backgroundColor: color.neutral._300,
+            marginVertical: spacing.xl,
+        },
+    });
+};
