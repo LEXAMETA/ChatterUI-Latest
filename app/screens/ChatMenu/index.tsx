@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
+  Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Picker } from '@react-native-picker/picker'
@@ -16,140 +17,208 @@ import SectionTitle from '@components/text/SectionTitle'
 import { tcpClientInstance, sendMockPrompt, Request, Response } from '@lib/tcp-client'
 import { Theme } from '@lib/theme/ThemeManager'
 
-// Local RAG + Main Chat Model imports
-import { getMainChatLlamaContext } from '@lib/engine/Local/LlamaLocal'
 import { initRagSystem, useGlobalRAGSystem, knowledgeBaseData } from '@lib/rag/ragSystem'
+import { Llama } from '@lib/engine/Local/LlamaLocal'
 
-interface Peer {
+import { usePeerDiscovery, DiscoveredPeerInfo } from '@lib/hooks/usePeerDiscovery'
+import { Logger } from '@lib/state/Logger'
+
+interface UsablePeer {
   ip: string
   model: string
   load: number
   lastSeen: number
+  deviceName?: string
+  deviceAddress?: string
+  isConnected?: boolean
 }
-
-const mockPeers: Peer[] = [
-  { ip: '192.168.1.100', model: 'llama-3-8b', load: 0.1, lastSeen: Date.now() - 5000 },
-  { ip: '192.168.1.101', model: 'mixtral-8x7b', load: 0.5, lastSeen: Date.now() - 1000 },
-  { ip: '192.168.1.102', model: 'qwen3', load: 0.2, lastSeen: Date.now() - 2000 },
-]
 
 const mockLoRAs = ['default', 'anime-style', 'fantasy-lore']
 
 const ChatMenu = () => {
   const { color, spacing, borderWidth, borderRadius } = Theme.useTheme()
 
-  // --- TCP Swarm State ---
-  const [availablePeers, setAvailablePeers] = useState<Peer[]>(mockPeers)
-  const [selectedPeerIp, setSelectedPeerIp] = useState<string>(mockPeers[0]?.ip || '')
-  const [selectedLoRA, setSelectedLoRA] = useState<string>(mockLoRAs[0] || '')
+  // Peer discovery hook
+  const {
+    peers: discoveredWifiDirectPeers,
+    discoveryStatus,
+    groupInfo,
+    startDiscovery,
+    stopDiscovery,
+    requestPermissions,
+    connectToPeer,
+    removeGroup,
+  } = usePeerDiscovery()
+
+  // TCP swarm state
+  const [availablePeers, setAvailablePeers] = useState<UsablePeer[]>([])
+  const [selectedPeerIp, setSelectedPeerIp] = useState<string>('local')
+  const [selectedLoRA, setSelectedLoRA] = useState<string>(mockLoRAs[0])
   const [tcpConnectionStatus, setTcpConnectionStatus] = useState<
     'Connected' | 'Connecting...' | 'Disconnected' | 'Error'
   >('Disconnected')
 
-  // --- Chat State ---
+  // Chat state
   const [swarmChatPrompt, setSwarmChatPrompt] = useState<string>('')
   const [swarmChatResponse, setSwarmChatResponse] = useState<string[]>([])
   const [isSending, setIsSending] = useState<boolean>(false)
 
-  // --- Local RAG + Main Chat Model State ---
-  const [mainChatLlamaContext, setMainChatLlamaContext] = useState<any | null>(null) // Use proper LlamaContext type if available
-
-  // Hook to get RAG system status
+  // RAG system
   const { rag, loading: isRagLoading, error: ragError } = useGlobalRAGSystem()
 
   const scrollViewRef = useRef<ScrollView>(null)
 
-  // --- Initialize RAG system and Main Chat Model on mount ---
+  // Initialize RAG system on mount
   useEffect(() => {
-    const loadModels = async () => {
+    const loadRag = async () => {
       try {
         await initRagSystem(knowledgeBaseData)
-        console.log('RAG System initialized successfully.')
-
-        const mainCtx = await getMainChatLlamaContext()
-        setMainChatLlamaContext(mainCtx)
-        console.log('Main Chat Model loaded successfully.')
+        Logger.info('RAG System initialized successfully.')
       } catch (error: any) {
-        console.error('Failed to load RAG or Main Chat Models:', error)
-        Alert.alert('Model Load Error', `Failed to load AI models: ${error.message}`)
+        Logger.error('Failed to initialize RAG System:', error)
+        Alert.alert('Model Load Error', `Failed to initialize RAG system: ${error.message}`)
       }
     }
-    loadModels()
+    loadRag()
   }, [])
 
-  // --- TCP Client connection management ---
+  // WiFi Direct discovery management
+  useEffect(() => {
+    const setupDiscovery = async () => {
+      if (Platform.OS === 'android') {
+        const hasPerms = await requestPermissions()
+        if (hasPerms) {
+          await startDiscovery()
+        }
+      }
+    }
+    setupDiscovery()
+    return () => {
+      stopDiscovery()
+      removeGroup()
+    }
+  }, [])
 
-useEffect(() => {
+  // Update availablePeers from discovered WiFi Direct peers and group info
+  useEffect(() => {
+    Logger.debug(`Discovered WiFi Direct peers: ${discoveredWifiDirectPeers.length}`)
+    Logger.debug(`Group Info: ${JSON.stringify(groupInfo)}`)
+
+    const updatedUsablePeers: UsablePeer[] = []
+
+    discoveredWifiDirectPeers.forEach((p) => {
+      let peerIp: string | undefined
+      let isPeerConnected = false
+
+      if (groupInfo && groupInfo.groupFormed) {
+        if (groupInfo.isGroupOwner) {
+          const client = groupInfo.clients?.find((c: any) => c.deviceAddress === p.deviceAddress)
+          if (client) {
+            peerIp = client.ipAddress
+            isPeerConnected = true
+          }
+        } else {
+          if (p.deviceAddress === groupInfo.groupOwnerAddress) {
+            peerIp = groupInfo.groupOwnerAddress
+            isPeerConnected = true
+          }
+        }
+      }
+
+      if (peerIp) {
+        updatedUsablePeers.push({
+          ip: peerIp,
+          model: `unknown-model-${p.deviceName?.substring(0, 5) ?? 'peer'}`,
+          load: Math.random() * 0.5,
+          lastSeen: Date.now(),
+          deviceName: p.deviceName,
+          deviceAddress: p.deviceAddress,
+          isConnected: isPeerConnected,
+        })
+      }
+    })
+
+    setAvailablePeers(updatedUsablePeers)
+
+    if (selectedPeerIp !== 'local' && !updatedUsablePeers.some((p) => p.ip === selectedPeerIp)) {
+      setSelectedPeerIp(updatedUsablePeers[0]?.ip || 'local')
+    }
+  }, [discoveredWifiDirectPeers, groupInfo])
+
+  // TCP Client connection management
+  useEffect(() => {
     tcpClientInstance.setStatusCallback(setTcpConnectionStatus)
 
-    if (selectedPeerIp && selectedPeerIp !== 'local') { // Add condition to not try to connect if 'local' is selected
-        const peer = availablePeers.find((p) => p.ip === selectedPeerIp)
-        if (peer) {
-            tcpClientInstance.connect(peer.ip, 8080)
-        }
+    if (selectedPeerIp && selectedPeerIp !== 'local') {
+      const peer = availablePeers.find((p) => p.ip === selectedPeerIp)
+      if (peer && peer.ip) {
+        tcpClientInstance.connect(peer.ip, 8080).catch((e) => {
+          Logger.error('TCP connect error:', e)
+        })
+      }
+    } else {
+      tcpClientInstance.disconnect()
     }
 
     return () => {
-        tcpClientInstance.disconnect()
-        // It's good to reset the status in cleanup, but setStatusCallback might not be needed here if it's set on mount.
-        tcpClientInstance.setStatusCallback(() => setTcpConnectionStatus('Disconnected'))
-        setTcpConnectionStatus('Disconnected')
+      tcpClientInstance.disconnect()
+      tcpClientInstance.setStatusCallback(() => setTcpConnectionStatus('Disconnected'))
+      setTcpConnectionStatus('Disconnected')
     }
-}, [selectedPeerIp, availablePeers]) // Added availablePeers to dependencies
+  }, [selectedPeerIp, availablePeers])
 
-
-  // Auto-scroll chat to bottom on new messages
+  // Auto-scroll chat on new messages
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true })
   }, [swarmChatResponse])
 
-  // --- Handlers for TCP connection buttons ---
-  const handleConnect = async () => {
-    const peer = availablePeers.find((p) => p.ip === selectedPeerIp)
-    if (peer) {
-      await tcpClientInstance.connect(peer.ip, 8080)
+  // Handlers
+  const handleConnect = useCallback(async () => {
+    const peerToConnect = discoveredWifiDirectPeers.find((p) => p.deviceAddress === selectedPeerIp)
+    if (peerToConnect) {
+      await connectToPeer(peerToConnect)
     } else {
-      Alert.alert('Connection Error', 'No peer selected or found.')
+      Alert.alert('Connection Error', 'No WiFi Direct peer selected or found.')
     }
-  }
+  }, [selectedPeerIp, discoveredWifiDirectPeers, connectToPeer])
 
-  const handleDisconnect = () => {
+  const handleDisconnect = useCallback(() => {
     tcpClientInstance.disconnect()
     setTcpConnectionStatus('Disconnected')
-  }
+    removeGroup()
+  }, [removeGroup])
 
-  const handleRefreshPeers = async () => {
-    console.log('Refreshing mock peers...')
-    const updatedPeers = mockPeers.filter((p) => Math.random() > 0.1)
-    setAvailablePeers(updatedPeers)
-    if (!updatedPeers.some((p) => p.ip === selectedPeerIp) && updatedPeers.length > 0) {
-      setSelectedPeerIp(updatedPeers[0].ip)
+  const handleRefreshPeers = useCallback(async () => {
+    Logger.info('Refreshing WiFi Direct peers...')
+    if (Platform.OS === 'android') {
+      const hasPerms = await requestPermissions()
+      if (hasPerms) {
+        await startDiscovery()
+      }
+    } else {
+      Alert.alert('Not Supported', 'Peer discovery is only supported on Android.')
     }
-  }
+  }, [requestPermissions, startDiscovery])
 
-  // --- Main chat send handler supporting both local RAG + main model and TCP swarm ---
+  // Main chat send handler
   const handleSwarmChatSend = async () => {
     if (!swarmChatPrompt.trim()) return
 
-    // Decide whether to use local RAG + main model or TCP swarm
-    // Here, if selectedPeerIp is empty or special value "local", use local; else use TCP swarm
-    // For demonstration, let's say if selectedPeerIp === 'local' use local RAG+main, else TCP swarm
-
     if (selectedPeerIp === 'local') {
-      // --- Local RAG + Main Chat Model path ---
       setIsSending(true)
       setSwarmChatResponse((prev) => [...prev, `You: ${swarmChatPrompt}`])
       setSwarmChatPrompt('')
 
       try {
         let finalResponseOutput = ''
+        const { currentChatContext, currentChatModel } = Llama.useLlama.getState()
 
         if (rag && !isRagLoading && !ragError) {
-          console.log('[ChatMenu] Initiating RAG query...')
+          Logger.info('[ChatMenu] Initiating RAG query...')
           const ragGeneratedContent = await rag.generate(swarmChatPrompt)
-          console.log('[ChatMenu] RAG generated content (from Pleias):', ragGeneratedContent)
+          Logger.info('[ChatMenu] RAG generated content:', ragGeneratedContent)
 
-          if (mainChatLlamaContext) {
+          if (currentChatContext && currentChatModel) {
             const finalPrompt = `
 Context from knowledge base (derived by RAG system):
 ${ragGeneratedContent}
@@ -159,28 +228,28 @@ User: ${swarmChatPrompt}
 AI:
 `.trim()
 
-            console.log('[ChatMenu] Sending final prompt to Main Chat Model:', finalPrompt)
+            Logger.info('[ChatMenu] Sending final prompt to Main Chat Model:', finalPrompt)
 
-            await mainChatLlamaContext.completion({
+            await currentChatContext.completion({
               prompt: finalPrompt,
               onToken: (token: string) => {
                 finalResponseOutput += token
-                // Optionally update UI in real-time here
               },
             })
 
             setSwarmChatResponse((prev) => [...prev, `AI (Local): ${finalResponseOutput}`])
           } else {
-            throw new Error('Main Chat Model not loaded.')
+            throw new Error(
+              'Local AI (Main Chat Model) is not active. Please load it via settings or ensure auto-load is enabled.'
+            )
           }
         } else if (ragError) {
           throw new Error(`RAG System Error: ${ragError}`)
         } else {
-          // Fallback to direct main model if RAG not ready
-          if (mainChatLlamaContext) {
-            console.warn('[ChatMenu] RAG System not ready. Falling back to direct Main Chat Model.')
-            const response = await mainChatLlamaContext.completion({ prompt: swarmChatPrompt })
-            finalResponseOutput = response.completion
+          if (currentChatContext && currentChatModel) {
+            Logger.warn('[ChatMenu] RAG System not ready. Falling back to direct Main Chat Model.')
+            const result = await currentChatContext.completion({ prompt: swarmChatPrompt, stream: false })
+            finalResponseOutput = result.text
             setSwarmChatResponse((prev) => [...prev, `AI (Local, No RAG): ${finalResponseOutput}`])
           } else {
             throw new Error('Local AI (Main Chat Model) not loaded.')
@@ -188,13 +257,12 @@ AI:
         }
       } catch (error: any) {
         setSwarmChatResponse((prev) => [...prev, `AI Error: ${error.message}`])
-        console.error('AI generation error:', error)
+        Logger.error('AI generation error:', error)
         Alert.alert('AI Generation Failed', `Could not get AI response: ${error.message}`)
       } finally {
         setIsSending(false)
       }
     } else {
-      // --- TCP Swarm path ---
       const currentPeer = availablePeers.find((p) => p.ip === selectedPeerIp)
       if (!currentPeer) {
         Alert.alert('Send Error', 'Please select a peer before sending a message.')
@@ -213,11 +281,10 @@ AI:
         return
       }
 
-      const message = `You: ${swarmChatPrompt}`
-      setSwarmChatResponse((prev) => [...prev, message])
+      setSwarmChatResponse((prev) => [...prev, `You: ${swarmChatPrompt}`])
       setSwarmChatPrompt('')
-
       setIsSending(true)
+
       try {
         const requestPayload: Request = {
           type: 'prompt',
@@ -248,7 +315,7 @@ AI:
         }
       } catch (error: any) {
         setSwarmChatResponse((prev) => [...prev, `AI Error: ${error.message}`])
-        console.error('Swarm chat send error:', error)
+        Logger.error('Swarm chat send error:', error)
         Alert.alert('Send Failed', `Could not get AI response: ${error.message}`)
       } finally {
         setIsSending(false)
@@ -256,7 +323,7 @@ AI:
     }
   }
 
-  // --- UI Helpers ---
+  // UI Helpers
   const getConnectionStatusColor = () => {
     switch (tcpConnectionStatus) {
       case 'Connected':
@@ -269,6 +336,19 @@ AI:
         return 'red'
       default:
         return 'gray'
+    }
+  }
+
+  // Label helper to show usable and raw peers info
+  const getPeerLabel = (peer: UsablePeer | DiscoveredPeerInfo) => {
+    if ('model' in peer) {
+      return `${peer.deviceName ?? peer.deviceAddress} (${peer.model}) Load: ${(peer.load! * 100).toFixed(0)}% ${
+        peer.isConnected ? '[Connected]' : ''
+      }`
+    } else {
+      return `${peer.deviceName ?? peer.deviceAddress} - Status: ${peer.status} ${
+        peer.isConnected ? '[Group Member]' : ''
+      }`
     }
   }
 
@@ -317,6 +397,19 @@ AI:
       <ScrollView ref={scrollViewRef} style={{ flex: 1, padding: spacing.m }}>
         <SectionTitle>{'Swarm AI Chat'}</SectionTitle>
 
+        {/* Discovery Status */}
+        {Platform.OS === 'android' && (
+          <Text style={{ color: color.text._900, marginBottom: spacing.s }}>
+            Discovery Status:{' '}
+            <Text style={{ fontWeight: 'bold', color: discoveryStatus === 'Error' ? 'red' : color.text._900 }}>
+              {discoveryStatus}
+            </Text>
+            {discoveryStatus === 'Scanning' && (
+              <ActivityIndicator size="small" color={color.text._900} style={{ marginLeft: spacing.s }} />
+            )}
+          </Text>
+        )}
+
         {/* Peer Selection */}
         <View style={styles.pickerRow}>
           <Text style={{ color: color.text._900, marginRight: spacing.s }}>Select Peer:</Text>
@@ -325,46 +418,54 @@ AI:
             onValueChange={(itemValue: string) => setSelectedPeerIp(itemValue)}
             style={styles.pickerStyle}
             itemStyle={{ height: 50 }}>
-            {/* Add a special option for local RAG+Main Chat */}
             <Picker.Item label="Local RAG + Main Chat Model" value="local" />
-            {availablePeers.length === 0 && <Picker.Item label="No Peers Found" value="" />}
+            {availablePeers.length === 0 && <Picker.Item label="No AI Peers Found" value="" />}
             {availablePeers.map((peer) => (
-              <Picker.Item
-                key={peer.ip}
-                label={`${peer.model} (${peer.ip}) Load: ${(peer.load * 100).toFixed(0)}% ${
-                  peer.lastSeen === Math.max(...availablePeers.map((p) => p.lastSeen || 0))
-                    ? '[Best]'
-                    : ''
-                }`}
-                value={peer.ip}
-              />
+              <Picker.Item key={peer.ip} label={getPeerLabel(peer)} value={peer.ip} />
             ))}
+            {discoveredWifiDirectPeers.map((peer) => {
+              if (!availablePeers.some((ap) => ap.deviceAddress === peer.deviceAddress)) {
+                return (
+                  <Picker.Item
+                    key={peer.deviceAddress}
+                    label={`[WiFi Direct Raw] ${getPeerLabel(peer)}`}
+                    value={peer.deviceAddress}
+                  />
+                )
+              }
+              return null
+            })}
           </Picker>
         </View>
 
-        {/* TCP Connection Buttons (disabled if local selected) */}
+        {/* TCP Connection Buttons */}
         {selectedPeerIp !== 'local' && (
           <View style={styles.buttonRow}>
             <Button
-              title="Connect"
+              title="Connect P2P"
               onPress={handleConnect}
-              disabled={tcpConnectionStatus === 'Connected' || isSending}
+              disabled={
+                discoveryStatus !== 'Idle' &&
+                discoveryStatus !== 'Scanning' &&
+                discoveryStatus !== 'Connected' &&
+                isSending
+              }
               color={color.primary._500}
             />
             <Button
-              title="Disconnect"
+              title="Disconnect P2P"
               onPress={handleDisconnect}
-              disabled={tcpConnectionStatus === 'Disconnected' || isSending}
+              disabled={!groupInfo?.groupFormed || isSending}
               color={color.error._500}
             />
             <Button title="Refresh Peers" onPress={handleRefreshPeers} disabled={isSending} color={color.primary._500} />
           </View>
         )}
 
-        {/* TCP Connection Status (hidden if local selected) */}
+        {/* TCP Connection Status */}
         {selectedPeerIp !== 'local' && (
           <Text style={{ color: color.text._900, marginBottom: spacing.m }}>
-            Connection Status:{' '}
+            TCP Connection Status:{' '}
             <Text style={{ color: getConnectionStatusColor(), fontWeight: 'bold' }}>{tcpConnectionStatus}</Text>
             {tcpConnectionStatus === 'Connecting...' && (
               <ActivityIndicator size="small" color={color.text._900} style={{ marginLeft: spacing.s }} />
@@ -372,7 +473,7 @@ AI:
           </Text>
         )}
 
-        {/* LoRA Selection (only relevant for TCP swarm) */}
+        {/* LoRA Selection */}
         {selectedPeerIp !== 'local' && (
           <View style={{ marginBottom: spacing.m }}>
             <Text style={{ color: color.text._900 }}>Select LoRA:</Text>
