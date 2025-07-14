@@ -311,13 +311,16 @@ export type CompletionOutput = {
   timings: CompletionTimings;
 };
 
+
+// lib/engine/Local/LlamaLocal.ts (excerpt of LlamaState and loadCurrentChatModel)
+
 export type LlamaState = {
   currentChatContext: LlamaContext | undefined;
   currentChatModel: ModelDataType | undefined;
   loadProgress: number;
   chatCount: number;
   promptCache?: string;
-  loadCurrentChatModel: (model: ModelDataType) => Promise<void>;
+  loadCurrentChatModel: (model: ModelDataType) => Promise<boolean>; // Changed return type to Promise<boolean>
   setLoadProgress: (progress: number) => void;
   unloadCurrentChatModel: () => Promise<void>;
   saveKV: (prompt?: string) => Promise<void>;
@@ -338,16 +341,21 @@ export const useLlama = create<LlamaState>()((set, get) => ({
   loadProgress: 0,
   chatCount: 0,
 
-  loadCurrentChatModel: async (model: ModelDataType) => {
+  loadCurrentChatModel: async (model: ModelDataType): Promise<boolean> => { // Explicitly define return type
     if (get().currentChatModel?.id === model.id && get().currentChatContext) {
       Logger.info('Main Chat Model Already Loaded!');
-      return;
+      return true; // Indicate success if already loaded
     }
 
     if (model.model_type !== 'main_chat') {
       Logger.errorToast(`Attempted to load non-main_chat model as current chat model: ${model.name} (${model.model_type})`);
-      return;
+      return false; // Indicate failure
     }
+
+    // Set modelLoading true (if you have this state in LlamaLocal or pass it via context/Zustand)
+    // For now, ModelManager handles this, but if LlamaLocal should also manage a "loading" state
+    // for the main chat model internally, you'd add it here.
+    // Llama.useLlama.setState({ isModelLoading: true }); // Example
 
     const { context, model: loadedModel } = await loadModelContext(
       model.id,
@@ -357,17 +365,22 @@ export const useLlama = create<LlamaState>()((set, get) => ({
       false
     );
 
-    if (!context) return;
+    if (!context) {
+        // Llama.useLlama.setState({ isModelLoading: false }); // Example
+        return false; // Indicate failure if context not obtained
+    }
 
     set({
       currentChatContext: context,
       currentChatModel: loadedModel!,
       chatCount: 1,
-      loadProgress: 100,
+      loadProgress: 100, // Assuming 100% on successful load
     });
 
     useEngineData.getState().setLastModelLoaded(loadedModel!);
     KV.useKVState.getState().setKvCacheLoaded(false);
+    // Llama.useLlama.setState({ isModelLoading: false }); // Example
+    return true; // Indicate success
   },
 
   setLoadProgress: (progress: number) => {
