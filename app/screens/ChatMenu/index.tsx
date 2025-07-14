@@ -78,22 +78,25 @@ const ChatMenu = () => {
   }, [])
 
   // --- TCP Client connection management ---
-  useEffect(() => {
+
+useEffect(() => {
     tcpClientInstance.setStatusCallback(setTcpConnectionStatus)
 
-    if (selectedPeerIp) {
-      const peer = availablePeers.find((p) => p.ip === selectedPeerIp)
-      if (peer) {
-        tcpClientInstance.connect(peer.ip, 8080)
-      }
+    if (selectedPeerIp && selectedPeerIp !== 'local') { // Add condition to not try to connect if 'local' is selected
+        const peer = availablePeers.find((p) => p.ip === selectedPeerIp)
+        if (peer) {
+            tcpClientInstance.connect(peer.ip, 8080)
+        }
     }
 
     return () => {
-      tcpClientInstance.disconnect()
-      tcpClientInstance.setStatusCallback(() => setTcpConnectionStatus('Disconnected'))
-      setTcpConnectionStatus('Disconnected')
+        tcpClientInstance.disconnect()
+        // It's good to reset the status in cleanup, but setStatusCallback might not be needed here if it's set on mount.
+        tcpClientInstance.setStatusCallback(() => setTcpConnectionStatus('Disconnected'))
+        setTcpConnectionStatus('Disconnected')
     }
-  }, [selectedPeerIp, availablePeers])
+}, [selectedPeerIp, availablePeers]) // Added availablePeers to dependencies
+
 
   // Auto-scroll chat to bottom on new messages
   useEffect(() => {
