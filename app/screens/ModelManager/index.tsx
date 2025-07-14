@@ -22,20 +22,21 @@ const ModelManager = () => {
     const styles = useStyles()
     const { color } = Theme.useTheme()
 
-    const { data: models, updatedAt } = useLiveQuery(Model.getModelListQuery()) // Renamed 'data' to 'models'
+    const { data: models, updatedAt } = useLiveQuery(Model.getModelListQuery())
 
     const [showSettings, setShowSettings] = useState(false)
 
-    const [modelLoading, setModelLoading] = useState(false)
-    const [modelImporting, setModelImporting] = useState(false)
+    // Moved modelLoading and modelImporting state here to be managed globally for ModelManager
+    const [modelLoading, setModelLoading] = useState(false) // Global loading for any model operation (loading/unloading context)
+    const [modelImporting, setModelImporting] = useState(false) // Global loading for file import/linking
 
     // Select currentChatModel and load/unload functions directly from useLlama state
     const { currentChatModel, loadProgress, setloadProgress, loadCurrentChatModel, unloadCurrentChatModel } = Llama.useLlama((state) => ({
         currentChatModel: state.currentChatModel,
         loadProgress: state.loadProgress,
         setloadProgress: state.setLoadProgress,
-        loadCurrentChatModel: state.loadCurrentChatModel, // Get the load function
-        unloadCurrentChatModel: state.unloadCurrentChatModel, // Get the unload function
+        loadCurrentChatModel: state.loadCurrentChatModel,
+        unloadCurrentChatModel: state.unloadCurrentChatModel,
     }));
 
     // Get RAG model IDs and setters from useEngineData state
@@ -67,6 +68,7 @@ const ModelManager = () => {
                     entering={SlideInLeft.easing(Easing.inOut(Easing.cubic))}
                     exiting={SlideOutLeft.easing(Easing.inOut(Easing.cubic))}>
                     <View style={styles.modelContainer}>
+                        {/* Conditional rendering for status text/progress bars */}
                         {!modelImporting && !modelLoading && models.length !== 0 && (
                             <View
                                 style={{
@@ -143,6 +145,7 @@ const ModelManager = () => {
                             <ModelItem
                                 item={item}
                                 index={index}
+                                // Pass global loading states
                                 modelLoading={modelLoading}
                                 setModelLoading={(b: boolean) => {
                                     if (b) setloadProgress(0)
@@ -164,10 +167,11 @@ const ModelManager = () => {
             {showSettings && (
                 <ModelSettings
                     modelImporting={modelImporting}
+                    setModelImporting={setModelImporting} // Pass setter to ModelSettings
                     modelLoading={modelLoading}
+                    setModelLoading={setModelLoading} // Pass setter to ModelSettings
                     exit={() => setShowSettings(false)}
-                    models={models} // Pass all models to settings
-                    // Pass RAG model state and setters to ModelSettings
+                    models={models}
                     embeddingModelId={embeddingModelId}
                     ragReasoningModelId={ragReasoningModelId}
                     setEmbeddingModelId={setEmbeddingModelId}
@@ -177,6 +181,8 @@ const ModelManager = () => {
             <ThemedButton
                 label={showSettings ? 'Back To Models' : 'Show Settings'}
                 onPress={() => setShowSettings(!showSettings)}
+                // Disable settings button if any global loading is active
+                disabled={modelLoading || modelImporting}
             />
         </View>
     )
