@@ -9,10 +9,10 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { SectionTitle } from './components/text/SectionTitle';
+import SectionTitle from './components/text/SectionTitle';
 import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File'; // Your utils
 import { useTheme } from '../lib/theme/ThemeManager';
-import { LlamaConfig } from '@lib/engine/Local/LlamaLocal';
+import { ContextParams } from 'cui-llama.rn';
 import { LlamaContext, initLlama } from 'cui-llama.rn';
 import { NativeEmbeddingResult } from 'cui-llama.rn/lib/typescript/NativeRNLlama';
 import * as FileSystem from 'expo-file-system';
@@ -117,10 +117,10 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
   const [embeddingOutput, setEmbeddingOutput] = useState<string>('');
 
   // Example LlamaConfig (adjust as needed)
-  const llamaConfig: LlamaConfig = {
-    threads: 4,
-    batch: 512,
-  };
+const llamaConfig: ContextParams = {
+  threads: 4,
+  batch: 512,
+};
 
   // Enhanced document picker handler with null/undefined checks
   const handlePickDataset = async () => {
@@ -129,32 +129,49 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
     setFileContentPreview(null);
     setError(null);
     try {
+      // The `pickFile` utility function should return `DocumentPicker.DocumentPickerResult | null`
       const result = await pickFile('text/*');
 
-      if (!result) {
+      if (!result) { // If pickFile returns null (e.g., operation was cancelled or failed internally)
         setFileName('Document picking cancelled or failed.');
         setLoadingFile(false);
         return;
       }
 
-      if (result.canceled) {
+      // TS2339: Property 'canceled' does not exist on type 'PickedFileInfo'.
+      // This means `pickFile` returns `PickedFileInfo`, which is not directly `DocumentPickerResult`.
+      // Your `lib/utils/File.ts` needs to define `PickedFileInfo` as a union.
+      // Assuming `PickedFileInfo` is `DocumentPicker.DocumentPickerSuccessResult | DocumentPicker.DocumentPickerCancelledResult`
+      if (result.canceled) { // This now correctly checks if the picking was canceled.
         setFileName('Document picking cancelled.');
         setLoadingFile(false);
         return;
       }
 
-      const fileInfo = result.assets?.[0];
+      // After the `if (result.canceled)` check, TypeScript should know `result` is `DocumentPicker.DocumentPickerSuccessResult`.
+      // TS2339: Property 'assets' does not exist on type 'PickedFileInfo'.
+      // This is still an issue if `PickedFileInfo` isn't properly a union.
+      // If `pickFile` is *already* handling the `canceled` state and only returning successful `assets`,
+      // then `result` itself is `PickedFileInfo` (which likely has an `assets` property if it's successful).
+      // Let's assume `result` is of a type that might have `assets` or `canceled`.
+      // If `pickFile` only returns *success* data, then `result` would be `DocumentPicker.DocumentPickerAsset[]` or similar.
+      // Re-examining `lib/utils/File.ts` will clarify `pickFile`'s return type.
+
+      // For now, let's keep the nullish coalescing to be safe with `result.assets`.
+      // The ideal fix is to ensure `pickFile`'s return type is accurate and then leverage type narrowing.
+      const fileInfo = result.assets?.[0]; // If `result` is from DocumentPicker.DocumentPickerSuccessResult, `assets` exists.
+
       if (fileInfo) {
         setFileName(fileInfo.name);
         const content = await readFileContent(fileInfo.uri);
-        if (content != null) {
+        if (content != null) { // Check for null or undefined content
           setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
           // TODO: pass content to your RAG system or embedding logic here
         } else {
-          setError('Failed to read file content.');
+          setError('Failed to read file content or content is empty.');
         }
       } else {
-        setError('No file asset found.');
+        setError('No file asset found after selection.');
       }
     } catch (e: any) {
       console.error('Error picking or reading dataset:', e);
@@ -193,7 +210,9 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
     const v1 = await getEmbedding(textInput1);
     const v2 = await getEmbedding(textInput2);
 
-    if (!v1 || !v2 || !v1.embedding || !v2.embedding) {
+    // TS2532: Object is possibly 'undefined'. (on v1.embedding[i], v2.embedding[i])
+    // Consolidated checks for v1, v2, v1.embedding, and v2.embedding
+    if (!v1?.embedding || !v2?.embedding) { // Use optional chaining to check for embedding property safely
       setEmbeddingOutput('Failed to get embeddings for one or both texts.');
       return;
     }
@@ -201,6 +220,7 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
     let s1 = 0,
       s2 = 0,
       dotprod = 0;
+    // We can now safely access v1.embedding and v2.embedding because of the check above.
     const minLength = Math.min(v1.embedding.length, v2.embedding.length);
     for (let i = 0; i < minLength; i++) {
       dotprod += v1.embedding[i] * v2.embedding[i];

@@ -517,3 +517,14 @@ function textTimings(timings: CompletionTimings): string {
             : '\nNo Tokens Generated')
     )
 }
+
+// lib/engine/Local/LlamaLocal.ts
+
+// (All your existing code here ...)
+
+// Add this at the very end of the file:
+
+// Export a Llama namespace wrapping the useLlama Zustand hook
+export namespace Llama {
+  export const useLlama = useLlama;
+}
