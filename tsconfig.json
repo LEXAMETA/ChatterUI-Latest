@@ -1,25 +1,50 @@
 {
-    "extends": "expo/tsconfig.base",
-    "compilerOptions": {
-        "strict": true,
-        "baseUrl": ".",
-        "paths": {
-            "@components/*": ["app/components/*"],
-            "@screens/*": ["app/screens/*"],
-            "@lib/*": ["lib/*"],
-            "@assets/*": ["assets/*"],
-            "@public/*": ["public/*"],
-            "@db": ["db/db"]
-        },
-        "allowJs": true
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "jsx": "react-native",
+    "strict": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "lib": ["esnext", "dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@lib/*": ["lib/*"],
+      "@app/*": ["app/*"],
+      "@assets/*": ["assets/*"],
+      "@components/*": ["app/components/*"],
+      "@screens/*": ["app/screens/*"],
+      "@constants/*": ["constants/*"],
+      "db/*": ["db/*"],
+      "@public/*": ["public/*"],
+      "@db": ["db/db"]
     },
-    "include": [
-        "**/*.ts",
-        "**/*.tsx",
-        "**/*.js",
-        "**/*.jsx",
-        ".expo/types/**/*.ts",
-        "expo-env.d.ts",
-        "app/_layout.tsx"
-    ]
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "allowJs": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "app.d.ts",
+    "app/_layout.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

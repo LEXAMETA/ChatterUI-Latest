@@ -37,10 +37,10 @@ export namespace Logger {
                 addLog: (entry) => {
                     const newlogs = [...get().logs, entry]
                     if (newlogs.length > maxloglength) newlogs.shift()
-                    set((state) => ({ ...state, logs: newlogs }))
+                    set(() => ({ logs: newlogs }))
                 },
                 flushLogs: () => {
-                    set((state) => ({ ...state, logs: [] }))
+                    set(() => ({ logs: [] }))
                 },
             }),
             {
@@ -51,7 +51,7 @@ export namespace Logger {
                     logs: state.logs,
                 }),
                 migrate: async (persistedState: any, version) => {
-                    //no migrations yet
+                    // No migrations yet
                 },
             }
         )
@@ -70,56 +70,65 @@ export namespace Logger {
 
     const createLog = (data: string, level: LogLevel): LogEntry => {
         const timestamp = `[${new Date().toTimeString().substring(0, 8)}]`
-        return { timestamp: timestamp, message: data, level: level }
+        return { timestamp, message: data, level }
     }
 
     const printLog = (log: LogEntry) => {
         console.log(`${LevelName[log.level]}${log.timestamp}: ${log.message}`)
     }
 
-    export const info = (data: string) => {
-        const logItem = createLog(data, LogLevel.INFO)
+    const formatMessage = (message: string, optionalParams: any[]): string => {
+        if (optionalParams.length === 0) return message
+        return message + ' ' + optionalParams.map(p => JSON.stringify(p)).join(' ')
+    }
+
+    export const info = (message: string, ...optionalParams: any[]) => {
+        const formattedMessage = formatMessage(message, optionalParams)
+        const logItem = createLog(formattedMessage, LogLevel.INFO)
         printLog(logItem)
         insertLogs(logItem)
     }
 
-    export const infoToast = (data: string) => {
-        info(data)
-        Toast.show(data, toastTime)
+    export const infoToast = (message: string, ...optionalParams: any[]) => {
+        info(message, ...optionalParams)
+        Toast.show(formatMessage(message, optionalParams), toastTime)
     }
 
-    export const warn = (data: string) => {
-        const logItem = createLog(data, LogLevel.WARN)
+    export const warn = (message: string, ...optionalParams: any[]) => {
+        const formattedMessage = formatMessage(message, optionalParams)
+        const logItem = createLog(formattedMessage, LogLevel.WARN)
         printLog(logItem)
         insertLogs(logItem)
     }
 
-    export const warnToast = (data: string) => {
-        warn(data)
-        Toast.show(data, toastTime, { textColor: 'yellow' })
+    export const warnToast = (message: string, ...optionalParams: any[]) => {
+        warn(message, ...optionalParams)
+        Toast.show(formatMessage(message, optionalParams), toastTime, { textColor: 'yellow' })
     }
 
-    export const error = (data: string) => {
-        const logItem = createLog(data, LogLevel.ERROR)
+    export const error = (message: string, ...optionalParams: any[]) => {
+        const formattedMessage = formatMessage(message, optionalParams)
+        const logItem = createLog(formattedMessage, LogLevel.ERROR)
         printLog(logItem)
         insertLogs(logItem)
     }
 
-    export const errorToast = (data: string) => {
-        error(data)
-        Toast.show(data, toastTime, { textColor: 'red' })
+    export const errorToast = (message: string, ...optionalParams: any[]) => {
+        error(message, ...optionalParams)
+        Toast.show(formatMessage(message, optionalParams), toastTime, { textColor: 'red' })
     }
 
-    export const debug = (data: string) => {
+    export const debug = (message: string, ...optionalParams: any[]) => {
         if (!__DEV__ && !mmkv.getBoolean(AppSettings.DevMode)) return
-        const logItem = createLog(data, LogLevel.DEBUG)
+        const formattedMessage = formatMessage(message, optionalParams)
+        const logItem = createLog(formattedMessage, LogLevel.DEBUG)
         printLog(logItem)
         insertLogs(logItem)
     }
 
-    export const debugToast = (data: string) => {
-        error(data)
-        Toast.show(data, toastTime, {
+    export const debugToast = (message: string, ...optionalParams: any[]) => {
+        debug(message, ...optionalParams)
+        Toast.show(formatMessage(message, optionalParams), toastTime, {
             textColor: 'blue',
         })
     }

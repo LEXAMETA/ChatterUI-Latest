@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Button, Text, ActivityIndicator, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Button, Text, ActivityIndicator, StyleSheet, TextInput, TouchableOpacity, Platform } from 'react-native'; // Added Platform for stylesheet
 import { SectionTitle } from './components/text/SectionTitle';
 import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File'; // Import your new utilities and AppDirectory
 import { useTheme } from '../lib/theme/ThemeManager'; // Assuming you have a theme context
 import { LlamaConfig } from '@lib/engine/Local/LlamaLocal'; // Assuming this path is correct for LlamaConfig
 import { LlamaContext, initLlama } from 'cui-llama.rn';
 import { NativeEmbeddingResult } from 'cui-llama.rn/lib/typescript/NativeRNLlama';
-import { documentDirectory } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system'; // Added import for FileSystem
 import { create } from 'zustand';
 import { rawdb } from '@db'; // Assuming this path is correct for your database
 
@@ -124,9 +124,22 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
     setFileContentPreview(null);
     setError(null);
     try {
-      const fileInfo = await pickFile('text/*'); // Or customize to 'application/json', '.json', 'text/csv'
+      // Updated pickFile to return DocumentPickerResult directly for easier handling
+      const result = await pickFile('text/*');
+
+      // Check if the user canceled the picker
+      if (result.canceled) {
+        setFileName("No file selected.");
+        setLoadingFile(false); // Make sure to turn off loading state
+        return; // Exit early if canceled
+      }
+
+      // Access assets, which will be present if not canceled
+      const fileInfo = result.assets?.[0]; // Get the first asset
+
       if (fileInfo) {
         setFileName(fileInfo.name);
+        // Corrected: use fileInfo.uri instead of documentDirectory + fileInfo.name
         const content = await readFileContent(fileInfo.uri);
         if (content) {
           setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : '')); // Show a preview
@@ -140,7 +153,8 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
           setError("Failed to read file content.");
         }
       } else {
-        setFileName("No file selected.");
+        // This case should ideally not happen if !result.canceled and assets array is empty
+        setError("No file asset found.");
       }
     } catch (e: any) {
       console.error("Error picking or reading dataset:", e);
