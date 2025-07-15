@@ -296,59 +296,60 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    padding: 24,          // changed from 20 → 24 (closest allowed)
   },
   indicator: {
-    marginVertical: 10,
+    marginVertical: 8,    // changed from 10 → 8
   },
   text: {
-    marginTop: 10,
+    marginTop: 12,        // changed from 10 → 12
   },
   previewContainer: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 5,
-    maxHeight: 150, // Limit preview height
+    marginTop: 12,        // changed from 10 → 12
+    padding: 8,           // changed from 10 → 8
+    borderRadius: 8,      // changed from 5 → 8
+    maxHeight: 150,
     overflow: 'hidden',
   },
   previewText: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', // Better monospace font handling
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 12,
   },
   errorText: {
-    marginTop: 10,
+    marginTop: 12,        // changed from 10 → 12
     color: 'red',
   },
   separator: {
     height: 1,
     backgroundColor: '#ccc',
-    marginVertical: 20,
+    marginVertical: 24,   // changed from 20 → 24
   },
   button: {
-    padding: 12,
-    borderRadius: 8,
+    padding: 12,          // already allowed
+    borderRadius: 8,      // already allowed
     alignItems: 'center',
-    marginVertical: 5,
+    marginVertical: 8,    // changed from 5 → 8
   },
   buttonText: {
     fontWeight: 'bold',
     fontSize: 16,
   },
   textInput: {
-    padding: 10,
-    borderRadius: 5,
+    padding: 8,           // changed from 10 → 8
+    borderRadius: 8,      // changed from 5 → 8
     borderWidth: 1,
-    marginVertical: 8,
+    marginVertical: 8,    // already allowed
     fontSize: 14,
   },
   outputText: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 5,
-    backgroundColor: '#f0f0f0', // Placeholder, use theme color
+    marginTop: 12,        // changed from 10 → 12
+    padding: 8,           // changed from 10 → 8
+    borderRadius: 8,      // changed from 5 → 8
+    backgroundColor: '#f0f0f0',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 12,
   },
@@ -356,14 +357,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: 12,        // changed from 10 → 12
   },
   smallButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 8,   // changed from 10 → 8
+    paddingHorizontal: 12, // already allowed
+    borderRadius: 8,      // already allowed
     alignItems: 'center',
-    marginVertical: 5,
-    width: '48%', // Roughly half width
+    marginVertical: 8,    // changed from 5 → 8
+    width: '48%',
   },
 });
