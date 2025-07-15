@@ -1,18 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { View, Button, Text, ActivityIndicator, StyleSheet, TextInput, TouchableOpacity, Platform } from 'react-native'; // Added Platform for stylesheet
+import React, { useState } from 'react';
+import {
+  View,
+  Button,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Platform,
+} from 'react-native';
 import { SectionTitle } from './components/text/SectionTitle';
-import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File'; // Import your new utilities and AppDirectory
-import { useTheme } from '../lib/theme/ThemeManager'; // Assuming you have a theme context
-import { LlamaConfig } from '@lib/engine/Local/LlamaLocal'; // Assuming this path is correct for LlamaConfig
+import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File'; // Your utils
+import { useTheme } from '../lib/theme/ThemeManager';
+import { LlamaConfig } from '@lib/engine/Local/LlamaLocal';
 import { LlamaContext, initLlama } from 'cui-llama.rn';
 import { NativeEmbeddingResult } from 'cui-llama.rn/lib/typescript/NativeRNLlama';
-import * as FileSystem from 'expo-file-system'; // Added import for FileSystem
+import * as FileSystem from 'expo-file-system';
 import { create } from 'zustand';
-import { rawdb } from '@db'; // Assuming this path is correct for your database
-
-interface EmbeddingScreenProps {
-  // Add any specific props for this screen if needed
-}
+import { rawdb } from '@db';
 
 // --- Zustand Store for Embedding State ---
 type EmbeddingStoreState = {
@@ -25,11 +30,9 @@ export const useEmbeddingStore = create<EmbeddingStoreState>()((set, get) => ({
   model: undefined,
   loadModel: async (preset: LlamaConfig) => {
     try {
-      // Ensure the models directory exists
       await FileSystem.makeDirectoryAsync(AppDirectory.ModelPath, { intermediates: true });
-
       const model = await initLlama({
-        model: AppDirectory.ModelPath + 'allminifp16.gguf', // Use AppDirectory for model path
+        model: AppDirectory.ModelPath + 'allminifp16.gguf',
         n_threads: preset.threads,
         n_batch: preset.batch,
         embedding: true,
@@ -38,7 +41,7 @@ export const useEmbeddingStore = create<EmbeddingStoreState>()((set, get) => ({
         console.error('Failed to initialize Llama model.');
         return;
       }
-      set({ model: model });
+      set({ model });
       console.log('Llama model loaded successfully.');
     } catch (error) {
       console.error('Error loading Llama model:', error);
@@ -54,7 +57,7 @@ export const useEmbeddingStore = create<EmbeddingStoreState>()((set, get) => ({
   },
 }));
 
-// --- Database Helpers (Moved from the second snippet) ---
+// --- Database Helpers ---
 const deleteTables = async () => {
   try {
     rawdb.execSync(`drop table if exists vec_examples`);
@@ -79,8 +82,6 @@ const createTables = async () => {
 };
 
 const insertData = async () => {
-  // This is sample data insertion.
-  // The original commented out batch insertion logic could be re-implemented if needed.
   try {
     rawdb.runSync(`insert into vec_examples(id, sample_embedding)
     values
@@ -94,70 +95,69 @@ const insertData = async () => {
   }
 };
 
+interface EmbeddingScreenProps {}
+
 export default function EmbeddingScreen(props: EmbeddingScreenProps) {
   const { colors } = useTheme();
+
   const [loadingFile, setLoadingFile] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileContentPreview, setFileContentPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // States for Llama embedding interaction
+  // Llama model and embedding from Zustand store
   const { loadModel, getEmbedding } = useEmbeddingStore((state) => ({
     loadModel: state.loadModel,
     getEmbedding: state.getEmbedding,
   }));
+
+  // Text inputs for embedding comparison
   const [textInput1, setTextInput1] = useState<string>('');
   const [textInput2, setTextInput2] = useState<string>('');
   const [embeddingOutput, setEmbeddingOutput] = useState<string>('');
 
-  // Example LlamaConfig. Adjust as per your actual LlamaLocal structure.
-  // This should ideally come from user settings or a predefined config.
+  // Example LlamaConfig (adjust as needed)
   const llamaConfig: LlamaConfig = {
-    threads: 4, // Example value
-    batch: 512, // Example value
-    // other LlamaConfig properties if any
+    threads: 4,
+    batch: 512,
   };
 
+  // Enhanced document picker handler with null/undefined checks
   const handlePickDataset = async () => {
     setLoadingFile(true);
     setFileName(null);
     setFileContentPreview(null);
     setError(null);
     try {
-      // Updated pickFile to return DocumentPickerResult directly for easier handling
       const result = await pickFile('text/*');
 
-      // Check if the user canceled the picker
-      if (result.canceled) {
-        setFileName("No file selected.");
-        setLoadingFile(false); // Make sure to turn off loading state
-        return; // Exit early if canceled
+      if (!result) {
+        setFileName('Document picking cancelled or failed.');
+        setLoadingFile(false);
+        return;
       }
 
-      // Access assets, which will be present if not canceled
-      const fileInfo = result.assets?.[0]; // Get the first asset
+      if (result.canceled) {
+        setFileName('Document picking cancelled.');
+        setLoadingFile(false);
+        return;
+      }
 
+      const fileInfo = result.assets?.[0];
       if (fileInfo) {
         setFileName(fileInfo.name);
-        // Corrected: use fileInfo.uri instead of documentDirectory + fileInfo.name
         const content = await readFileContent(fileInfo.uri);
-        if (content) {
-          setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : '')); // Show a preview
-          console.log("Dataset loaded successfully. Content length:", content.length);
-          // TODO: Pass 'content' to your RAG system for processing/embedding
-          // e.g., await ragSystem.addDataset(fileInfo.name, content);
-          // Example: If you want to embed the loaded content
-          // const embeddings = await getEmbedding(content);
-          // console.log("Content embeddings:", embeddings);
+        if (content != null) {
+          setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
+          // TODO: pass content to your RAG system or embedding logic here
         } else {
-          setError("Failed to read file content.");
+          setError('Failed to read file content.');
         }
       } else {
-        // This case should ideally not happen if !result.canceled and assets array is empty
-        setError("No file asset found.");
+        setError('No file asset found.');
       }
     } catch (e: any) {
-      console.error("Error picking or reading dataset:", e);
+      console.error('Error picking or reading dataset:', e);
       setError(`Error: ${e.message}`);
     } finally {
       setLoadingFile(false);
@@ -166,24 +166,20 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
 
   const handleQueryDatabase = async () => {
     const now = performance.now();
-    // Use an actual embedding from a text input or a pre-defined one
-    // For now, using a random input as per the original snippet
+
     const inputVector = `[${Array(8)
       .fill(0)
-      .map((item) => 2 * (Math.random() - 0.5))}]`;
+      .map(() => 2 * (Math.random() - 0.5))
+      .join(', ')}]`;
 
     try {
-      const data = await rawdb.getAllAsync(`select
-        id,
-        distance
-        from vec_examples
-        where sample_embedding match '${inputVector}'
-        order by distance
-      limit 1`);
+      const data = await rawdb.getAllAsync(
+        `select id, distance from vec_examples where sample_embedding match '${inputVector}' order by distance limit 1`
+      );
       console.log('Query Input:', inputVector);
       console.log('Query Result:', data);
       setEmbeddingOutput(`Query Result: ${JSON.stringify(data)}\nTime: ${(performance.now() - now).toFixed(2)}ms`);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error querying database:', e);
       setEmbeddingOutput(`Error querying DB: ${e.message}`);
     }
@@ -202,17 +198,14 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
       return;
     }
 
-    let s1 = 0;
-    let s2 = 0;
-    let dotprod = 0;
-
-    // Ensure embeddings are of the same length
+    let s1 = 0,
+      s2 = 0,
+      dotprod = 0;
     const minLength = Math.min(v1.embedding.length, v2.embedding.length);
-
     for (let i = 0; i < minLength; i++) {
       dotprod += v1.embedding[i] * v2.embedding[i];
-      s1 += v1.embedding[i] * v1.embedding[i];
-      s2 += v2.embedding[i] * v2.embedding[i];
+      s1 += v1.embedding[i] ** 2;
+      s2 += v2.embedding[i] ** 2;
     }
 
     const similarity = dotprod / (Math.sqrt(s1) * Math.sqrt(s2));
@@ -239,10 +232,7 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
       <View style={styles.separator} />
 
       <SectionTitle title="Llama Embedding & Vector DB" />
-      <TouchableOpacity
-        onPress={() => loadModel(llamaConfig)}
-        style={[styles.button, { backgroundColor: colors.primary }]}
-      >
+      <TouchableOpacity onPress={() => loadModel(llamaConfig)} style={[styles.button, { backgroundColor: colors.primary }]}>
         <Text style={[styles.buttonText, { color: colors.buttonText }]}>Load Llama Embedding Model</Text>
       </TouchableOpacity>
 
@@ -251,43 +241,30 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
         onChangeText={setTextInput1}
         placeholder="Enter text 1 for embedding"
         placeholderTextColor={colors.text._400}
-        style={[
-          styles.textInput,
-          {
-            color: colors.text._100,
-            borderColor: colors.text._400,
-          },
-        ]}
+        style={[styles.textInput, { color: colors.text._100, borderColor: colors.text._400 }]}
       />
       <TextInput
         value={textInput2}
         onChangeText={setTextInput2}
         placeholder="Enter text 2 for embedding"
         placeholderTextColor={colors.text._400}
-        style={[
-          styles.textInput,
-          {
-            color: colors.text._100,
-            borderColor: colors.text._400,
-          },
-        ]}
+        style={[styles.textInput, { color: colors.text._100, borderColor: colors.text._400 }]}
       />
-      <TouchableOpacity
-        onPress={handleTestEmbedding}
-        style={[styles.button, { backgroundColor: colors.accent }]}
-      >
+      <TouchableOpacity onPress={handleTestEmbedding} style={[styles.button, { backgroundColor: colors.accent }]}>
         <Text style={[styles.buttonText, { color: colors.buttonText }]}>Calculate Embedding Similarity</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        onPress={() => { setTextInput1(''); setTextInput2(''); setEmbeddingOutput(''); }}
+        onPress={() => {
+          setTextInput1('');
+          setTextInput2('');
+          setEmbeddingOutput('');
+        }}
         style={[styles.button, { backgroundColor: colors.secondary }]}
       >
         <Text style={[styles.buttonText, { color: colors.buttonText }]}>Clear Text Inputs</Text>
       </TouchableOpacity>
 
-      {embeddingOutput ? (
-        <Text style={[styles.outputText, { color: colors.text._100 }]}>{embeddingOutput}</Text>
-      ) : null}
+      {embeddingOutput ? <Text style={[styles.outputText, { color: colors.text._100 }]}>{embeddingOutput}</Text> : null}
 
       <View style={styles.separator} />
 
@@ -310,22 +287,21 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,          // changed from 20 → 24 (closest allowed)
+    padding: 24,
   },
   indicator: {
-    marginVertical: 8,    // changed from 10 → 8
+    marginVertical: 8,
   },
   text: {
-    marginTop: 12,        // changed from 10 → 12
+    marginTop: 12,
   },
   previewContainer: {
-    marginTop: 12,        // changed from 10 → 12
-    padding: 8,           // changed from 10 → 8
-    borderRadius: 8,      // changed from 5 → 8
+    marginTop: 12,
+    padding: 8,
+    borderRadius: 8,
     maxHeight: 150,
     overflow: 'hidden',
   },
@@ -334,35 +310,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   errorText: {
-    marginTop: 12,        // changed from 10 → 12
+    marginTop: 12,
     color: 'red',
   },
   separator: {
     height: 1,
     backgroundColor: '#ccc',
-    marginVertical: 24,   // changed from 20 → 24
+    marginVertical: 24,
   },
   button: {
-    padding: 12,          // already allowed
-    borderRadius: 8,      // already allowed
+    padding: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    marginVertical: 8,    // changed from 5 → 8
+    marginVertical: 8,
   },
   buttonText: {
     fontWeight: 'bold',
     fontSize: 16,
   },
   textInput: {
-    padding: 8,           // changed from 10 → 8
-    borderRadius: 8,      // changed from 5 → 8
+    padding: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    marginVertical: 8,    // already allowed
+    marginVertical: 8,
     fontSize: 14,
   },
   outputText: {
-    marginTop: 12,        // changed from 10 → 12
-    padding: 8,           // changed from 10 → 8
-    borderRadius: 8,      // changed from 5 → 8
+    marginTop: 12,
+    padding: 8,
+    borderRadius: 8,
     backgroundColor: '#f0f0f0',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 12,
@@ -371,14 +347,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 12,        // changed from 10 → 12
+    marginTop: 12,
   },
   smallButton: {
-    paddingVertical: 8,   // changed from 10 → 8
-    paddingHorizontal: 12, // already allowed
-    borderRadius: 8,      // already allowed
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    marginVertical: 8,    // changed from 5 → 8
+    marginVertical: 8,
     width: '48%',
   },
 });

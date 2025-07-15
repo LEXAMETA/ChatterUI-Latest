@@ -23,12 +23,14 @@ export interface PickedFileInfo {
     size: number | null
 }
 
+
 /**
- * Pick a file using Expo DocumentPicker.
- * @param type MIME type or array of MIME types, default '*\/*'
- * @param copyToCacheDirectory Whether to copy file to cache for easier reading, default true
- * @returns File info or null if cancelled/error
+ * @param {string | string[]} type MIME type or array of MIME types. Default is `'*/*'`.
+ * @param {boolean} copyToCacheDirectory Whether to copy file to cache for easier reading.
+ * @default true
+ * @returns {DocumentPicker.DocumentPickerResult | null} File info or null if cancelled or error.
  */
+
 export async function pickFile(
     type: string | string[] = '*/*',
     copyToCacheDirectory: boolean = true
@@ -39,8 +41,15 @@ export async function pickFile(
             copyToCacheDirectory,
         })
 
-        if (result.type === 'success' && Array.isArray(result.assets) && result.assets.length > 0) {
+        // Safe check for null/undefined and cancellation
+        if (
+            result &&
+            result.type === 'success' &&
+            Array.isArray(result.assets) &&
+            result.assets.length > 0
+        ) {
             const asset = result.assets[0]
+            // Access mimeType safely instead of deprecated 'type'
             return {
                 uri: asset.uri,
                 name: asset.name,
@@ -69,7 +78,7 @@ export async function pickFile(
  * Read file content as string from a URI.
  * @param uri File URI
  * @param encoding Encoding type (utf8 or base64), default UTF8
- * @returns String content or null on error
+ * @returns File content string or null on error
  */
 export async function readFileContent(
     uri: string,
@@ -88,12 +97,8 @@ export async function readFileContent(
     }
 }
 
-/**
- * Read binary file URI for native module consumption.
- * For llama.rn or similar, often the URI is passed directly.
- * @param uri File URI
- * @returns URI string or null on error
- */
+// --- Additional utilities below ---
+
 export async function readBinaryFile(uri: string): Promise<string | null> {
     try {
         // Returning URI directly for native modules that accept file URIs.
@@ -108,11 +113,6 @@ export async function readBinaryFile(uri: string): Promise<string | null> {
     }
 }
 
-/**
- * Get file extension from filename.
- * @param filename Filename string
- * @returns Extension in lowercase or null if none
- */
 export function getFileExtension(filename: string): string | null {
     const parts = filename.split('.')
     if (parts.length > 1) {
@@ -121,12 +121,6 @@ export function getFileExtension(filename: string): string | null {
     return null
 }
 
-/**
- * Copy a file to the app's document directory under a given filename.
- * @param sourceUri Source file URI
- * @param destinationFileName Destination filename (with extension)
- * @returns Destination URI or null on failure
- */
 export async function copyFileToAppDirectory(
     sourceUri: string,
     destinationFileName: string
@@ -157,11 +151,6 @@ export async function copyFileToAppDirectory(
     }
 }
 
-/**
- * Check if a file exists in the app's document directory.
- * @param fileName Filename to check
- * @returns True if exists, false otherwise
- */
 export async function fileExistsInAppDirectory(fileName: string): Promise<boolean> {
     try {
         const appDir = FileSystem.documentDirectory
@@ -178,12 +167,6 @@ export async function fileExistsInAppDirectory(fileName: string): Promise<boolea
     }
 }
 
-/**
- * Save string data to cache directory and trigger download (for React Native environments).
- * @param data String data to save
- * @param filename Filename with extension
- * @param encoding Encoding type ('base64' or 'utf8')
- */
 export const saveStringToDownload = async (
     data: string,
     filename: string,
@@ -204,11 +187,12 @@ export const saveStringToDownload = async (
 }
 
 type PickerResult = { success: false } | { success: true; data: string }
+
 type JSONPickerResult = { success: false } | { success: true; data: any }
 
 /**
  * Pick a JSON document and parse it.
- * @param multiple Allow multiple selection (currently unused)
+ * @param multiple Allow multiple selection - currently unused
  * @returns Parsed JSON data or failure
  */
 export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONPickerResult> => {
@@ -229,8 +213,8 @@ export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONP
 }
 
 /**
- * Pick a document as string with specified encoding and type.
- * @param options Options for picking document
+ * Pick a document as string with specified encoding and MIME type.
+ * @param options Options: multiple, encoding, type
  * @returns Success with data string or failure
  */
 export const pickStringDocument = async ({
@@ -244,11 +228,13 @@ export const pickStringDocument = async ({
 } = {}): Promise<PickerResult> => {
     try {
         const result = await DocumentPicker.getDocumentAsync({ type })
-        if (result.canceled || !result.assets?.[0]?.uri) {
+        if (!result || result.canceled || !Array.isArray(result.assets) || result.assets.length === 0) {
             return { success: false }
         }
-        const uri = result.assets[0].uri
-        const data = await FileSystem.readAsStringAsync(uri, { encoding }).catch((e) => {
+        const asset = result.assets[0]
+        if (!asset.uri) return { success: false }
+
+        const data = await FileSystem.readAsStringAsync(asset.uri, { encoding }).catch((e) => {
             if (Logger?.info) {
                 Logger.info(`Failed to read file: ${e}`)
             } else {
@@ -256,7 +242,8 @@ export const pickStringDocument = async ({
             }
             return null
         })
-        if (!data) return { success: false }
+        if (data === null) return { success: false }
+
         return { success: true, data }
     } catch (error) {
         if (Logger?.error) {
