@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 
 type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'critical' | 'disabled'
-type ButtonSize = 'small' | 'medium' | 'large'; // Add button size type
+type ButtonSize = 'small' | 'medium' | 'large' // Add button size type
 
 interface ThemedButtonProps extends Omit<PressableProps, 'style'> {
     labelStyle?: TextStyle
@@ -28,8 +28,8 @@ interface ThemedButtonProps extends Omit<PressableProps, 'style'> {
     iconSize?: number
     iconStyle?: TextStyle
     icon?: ReactNode
-    showActivityIndicator?: boolean; // New prop for loading spinner
-    size?: ButtonSize; // New prop for button size
+    showActivityIndicator?: boolean // New prop for loading spinner
+    size?: ButtonSize // New prop for button size
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -39,45 +39,54 @@ type ButtonTheme = {
     labelStyle: TextStyle
 }
 
-const useButtonTheme = (variant: ButtonVariant, size: ButtonSize): ButtonTheme => { // Pass size to useButtonTheme
+const useButtonTheme = (variant: ButtonVariant, size: ButtonSize): ButtonTheme => {
+    // Pass size to useButtonTheme
     const theme = Theme.useTheme()
 
     const getPaddingVertical = () => {
         switch (size) {
-            case 'small': return theme.spacing.s;
-            case 'large': return theme.spacing.l;
-            default: return theme.spacing.m;
+            case 'small':
+                return theme.spacing.s
+            case 'large':
+                return theme.spacing.l
+            default:
+                return theme.spacing.m
         }
-    };
+    }
 
     const getPaddingHorizontal = () => {
         switch (size) {
-            case 'small': return theme.spacing.m;
-            case 'large': return theme.spacing.xl2;
-            default: return theme.spacing.xl;
+            case 'small':
+                return theme.spacing.m
+            case 'large':
+                return theme.spacing.xl2
+            default:
+                return theme.spacing.xl
         }
-    };
+    }
 
     const getFontSize = () => {
         switch (size) {
-            case 'small': return theme.fontSize.s;
-            case 'large': return theme.fontSize.xl;
-            default: return theme.fontSize.m;
+            case 'small':
+                return theme.fontSize.s
+            case 'large':
+                return theme.fontSize.xl
+            default:
+                return theme.fontSize.m
         }
-    };
+    }
 
     const baseButtonStyle = {
         borderWidth: theme.borderWidth.m,
         paddingVertical: getPaddingVertical(),
         paddingHorizontal: getPaddingHorizontal(),
         borderRadius: theme.borderRadius.m,
-    };
+    }
 
     const baseLabelStyle = {
         textAlign: 'center' as 'center', // Explicitly type for StyleSheet
         fontSize: getFontSize(),
-    };
-
+    }
 
     //TODO:
     // Have a lightness checker to figure out whether or not to use light or dark text
@@ -175,7 +184,7 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
 
     return (
         <AnimatedPressable
-            disabled={variant === 'disabled' || rest.disabled || showActivityIndicator} // Disable button if loading
+            disabled={variant === 'disabled' ?? rest.disabled ?? showActivityIndicator} // Disable button if loading
             onPressIn={(event) => {
                 handlePressIn()
                 if (onPressIn) onPressIn(event)
@@ -198,7 +207,7 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
             ])}>
             {showActivityIndicator ? (
                 <ActivityIndicator
-                    size={iconSize || (size === 'small' ? 'small' : 'large')} // Adjust spinner size based on button size
+                    size={iconSize ?? (size === 'small' ? 'small' : 'large')} // Adjust spinner size based on button size
                     color={theme.labelStyle.color}
                 />
             ) : (
@@ -219,4 +228,4 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
     )
 }
 
-export default ThemedButton;
+export default ThemedButton

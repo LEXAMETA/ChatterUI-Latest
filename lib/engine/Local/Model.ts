@@ -47,7 +47,9 @@ export namespace Model {
         })
     }
 
-    export const linkModelExternal = async (modelType: ModelDataType['model_type'] = 'main_chat') => {
+    export const linkModelExternal = async (
+        modelType: ModelDataType['model_type'] = 'main_chat'
+    ) => {
         return getDocumentAsync({ copyToCacheDirectory: false }).then(async (result) => {
             if (result.canceled) return false
             const file = result.assets[0]
@@ -85,7 +87,12 @@ export namespace Model {
         deleteOnFailure: boolean = false,
         modelType: ModelDataType['model_type'] = 'main_chat'
     ) => {
-        return setModelDataInternal(filename, `${AppDirectory.ModelPath}${filename}`, deleteOnFailure, modelType)
+        return setModelDataInternal(
+            filename,
+            `${AppDirectory.ModelPath}${filename}`,
+            deleteOnFailure,
+            modelType
+        )
     }
 
     export const createModelDataExternal = async (
@@ -127,7 +134,11 @@ export namespace Model {
         return true
     }
 
-    const initialModelEntry = (filename: string, file_path: string, modelType: ModelDataType['model_type']) => ({
+    const initialModelEntry = (
+        filename: string,
+        file_path: string,
+        modelType: ModelDataType['model_type']
+    ) => ({
         context_length: 0,
         file: filename,
         file_path,
@@ -214,13 +225,19 @@ export namespace KV {
             (set, get) => ({
                 kvCacheLoaded: false,
                 kvCacheTokens: [],
-                setKvCacheLoaded: (b: boolean) => set(state => ({ ...state, kvCacheLoaded: b })),
-                setKvCacheTokens: (tokens: number[]) => set(state => ({ ...state, kvCacheTokens: tokens })),
+                setKvCacheLoaded: (b: boolean) => set((state) => ({ ...state, kvCacheLoaded: b })),
+                setKvCacheTokens: (tokens: number[]) =>
+                    set((state) => ({ ...state, kvCacheTokens: tokens })),
                 verifyKVCache: (tokens: number[]) => {
                     const cachedTokens = get().kvCacheTokens
                     let matched = 0
-                    const [a, b] = cachedTokens.length <= tokens.length ? [cachedTokens, tokens] : [tokens, cachedTokens]
-                    a.forEach((v, i) => { if (v === b[i]) matched++ })
+                    const [a, b] =
+                        cachedTokens.length <= tokens.length
+                            ? [cachedTokens, tokens]
+                            : [tokens, cachedTokens]
+                    a.forEach((v, i) => {
+                        if (v === b[i]) matched++
+                    })
                     return {
                         match: matched === a.length,
                         cachedLength: cachedTokens.length,

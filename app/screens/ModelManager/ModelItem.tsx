@@ -19,8 +19,8 @@ type ModelItemProps = {
     setModelLoading: (b: boolean) => void // Function to set global modelLoading state
     modelImporting: boolean // True if ANY model is importing
     // New props for main chat model
-    currentChatModel: ModelDataType | undefined;
-    loadCurrentChatModel: (model: ModelDataType) => Promise<void>;
+    currentChatModel: ModelDataType | undefined
+    loadCurrentChatModel: (model: ModelDataType) => Promise<void>
 }
 
 const ModelItem: React.FC<ModelItemProps> = ({
@@ -37,15 +37,14 @@ const ModelItem: React.FC<ModelItemProps> = ({
 
     // Use currentChatModel from props instead of Llama.useLlama state directly in ModelItem
     // This allows the parent (ModelManager) to control the loading state visually.
-    const isCurrentModelActive = currentChatModel?.id === item.id;
-
+    const isCurrentModelActive = currentChatModel?.id === item.id
 
     const [showEdit, setShowEdit] = useState(false)
     //@ts-ignore
     const quant: string = item.quantization && GGMLNameMap[item.quantization]
-    
+
     // Disable delete if this is the active main chat model, or if any model is globally loading
-    const disableDelete = isCurrentModelActive || modelLoading; 
+    const disableDelete = isCurrentModelActive || modelLoading
     const isInvalid = Model.isInitialEntry(item)
 
     const handleDeleteModel = () => {
@@ -65,18 +64,18 @@ const ModelItem: React.FC<ModelItemProps> = ({
                     onPress: async () => {
                         // If the deleted model is the currently loaded main chat model, unload it
                         if (isCurrentModelActive) {
-                            await Llama.useLlama.getState().unloadCurrentChatModel();
+                            await Llama.useLlama.getState().unloadCurrentChatModel()
                         }
                         // If the deleted model is assigned as a RAG model, unset its ID
                         if (Llama.useEngineData.getState().embeddingModelId === item.id) {
-                            Llama.useEngineData.getState().setEmbeddingModelId(null);
+                            Llama.useEngineData.getState().setEmbeddingModelId(null)
                         }
                         if (Llama.useEngineData.getState().ragReasoningModelId === item.id) {
-                            Llama.useEngineData.getState().setRagReasoningModelId(null);
+                            Llama.useEngineData.getState().setRagReasoningModelId(null)
                         }
 
                         await Model.deleteModelById(item.id)
-                        Logger.infoToast(`Model '${item.name}' deleted.`); // Provide feedback
+                        Logger.infoToast(`Model '${item.name}' deleted.`) // Provide feedback
                     },
                     type: 'warning',
                 },
@@ -86,47 +85,48 @@ const ModelItem: React.FC<ModelItemProps> = ({
 
     // Disable loading/unloading buttons if any model is importing or loading,
     // or if the current item is invalid.
-    const disableLoad = modelLoading || modelImporting || isInvalid;
-    const disableUnload = modelLoading || modelImporting;
+    const disableLoad = modelLoading || modelImporting || isInvalid
+    const disableUnload = modelLoading || modelImporting
 
     // Edit button disabled if this model is active, any model is loading, or it's invalid
-    const disableEdit = isCurrentModelActive || modelLoading || isInvalid;
-
+    const disableEdit = isCurrentModelActive || modelLoading || isInvalid
 
     const handleLoadChatModel = async () => {
-        if (disableLoad) return;
-        
+        if (disableLoad) return
+
         // Only allow loading if it's a 'main_chat' type
         if (item.model_type !== 'main_chat') {
-            Alert.alert("Incorrect Model Type", `This model is of type '${item.model_type}' and cannot be loaded as the main chat model.`);
-            return;
+            Alert.alert(
+                'Incorrect Model Type',
+                `This model is of type '${item.model_type}' and cannot be loaded as the main chat model.`
+            )
+            return
         }
 
-        setModelLoading(true); // Signal to parent that loading has started
+        setModelLoading(true) // Signal to parent that loading has started
         try {
-            await loadCurrentChatModel(item); // Use the new prop function
-            Logger.infoToast(`Main chat model '${item.name}' loaded.`);
+            await loadCurrentChatModel(item) // Use the new prop function
+            Logger.infoToast(`Main chat model '${item.name}' loaded.`)
         } catch (error) {
-            Logger.errorToast(`Failed to load model: ${error.message}`);
+            Logger.errorToast(`Failed to load model: ${error.message}`)
         } finally {
-            setModelLoading(false); // Signal loading finished
+            setModelLoading(false) // Signal loading finished
         }
-    };
+    }
 
     const handleUnloadChatModel = async () => {
-        if (disableUnload) return;
+        if (disableUnload) return
 
-        setModelLoading(true); // Indicate unloading
+        setModelLoading(true) // Indicate unloading
         try {
-            await Llama.useLlama.getState().unloadCurrentChatModel(); // Direct call to global unload
-            Logger.infoToast(`Main chat model '${item.name}' unloaded.`);
+            await Llama.useLlama.getState().unloadCurrentChatModel() // Direct call to global unload
+            Logger.infoToast(`Main chat model '${item.name}' unloaded.`)
         } catch (error) {
-            Logger.errorToast(`Failed to unload model: ${error.message}`);
+            Logger.errorToast(`Failed to unload model: ${error.message}`)
         } finally {
-            setModelLoading(false); // Signal unloading finished
+            setModelLoading(false) // Signal unloading finished
         }
-    };
-
+    }
 
     return (
         <View style={styles.modelContainer}>
@@ -150,7 +150,10 @@ const ModelItem: React.FC<ModelItemProps> = ({
                     <Text style={{ ...styles.tag, textTransform: 'capitalize' }}>
                         {item.architecture}
                     </Text>
-                    <Text style={{ ...styles.tag, textTransform: 'capitalize' }}>{item.model_type}</Text> {/* Display model_type */}
+                    <Text style={{ ...styles.tag, textTransform: 'capitalize' }}>
+                        {item.model_type}
+                    </Text>{' '}
+                    {/* Display model_type */}
                     <Text style={styles.tag}>
                         {item.file_path.startsWith('content') ? 'External' : 'Internal'}
                     </Text>
@@ -194,11 +197,14 @@ const ModelItem: React.FC<ModelItemProps> = ({
                 {item.model_type === 'main_chat' && (
                     <>
                         {!isCurrentModelActive ? (
-                            <TouchableOpacity
-                                disabled={disableLoad}
-                                onPress={handleLoadChatModel}>
-                                {modelLoading && Llama.useLlama.getState().currentChatModel?.id === item.id ? ( // Show loading indicator specifically for THIS model if it's the one loading
-                                    <ActivityIndicator size="small" color={color.text._300} style={styles.button}/>
+                            <TouchableOpacity disabled={disableLoad} onPress={handleLoadChatModel}>
+                                {modelLoading &&
+                                Llama.useLlama.getState().currentChatModel?.id === item.id ? ( // Show loading indicator specifically for THIS model if it's the one loading
+                                    <ActivityIndicator
+                                        size="small"
+                                        color={color.text._300}
+                                        style={styles.button}
+                                    />
                                 ) : (
                                     <AntDesign
                                         name="playcircleo"
@@ -212,8 +218,13 @@ const ModelItem: React.FC<ModelItemProps> = ({
                             <TouchableOpacity
                                 disabled={disableUnload}
                                 onPress={handleUnloadChatModel}>
-                                {modelLoading && Llama.useLlama.getState().currentChatModel?.id === item.id ? ( // Show loading indicator specifically for THIS model if it's the one loading
-                                    <ActivityIndicator size="small" color={color.text._100} style={styles.button}/>
+                                {modelLoading &&
+                                Llama.useLlama.getState().currentChatModel?.id === item.id ? ( // Show loading indicator specifically for THIS model if it's the one loading
+                                    <ActivityIndicator
+                                        size="small"
+                                        color={color.text._100}
+                                        style={styles.button}
+                                    />
                                 ) : (
                                     <AntDesign
                                         name="closecircleo"
@@ -298,6 +309,6 @@ const useStyles = () => {
             color: 'green', // Or a themed green color
             marginTop: spacing.s,
             textAlign: 'center',
-        }
+        },
     })
 }

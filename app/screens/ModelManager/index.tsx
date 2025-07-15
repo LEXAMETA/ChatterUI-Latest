@@ -31,22 +31,28 @@ const ModelManager = () => {
     const [modelImporting, setModelImporting] = useState(false) // Global loading for file import/linking
 
     // Select currentChatModel and load/unload functions directly from useLlama state
-    const { currentChatModel, loadProgress, setloadProgress, loadCurrentChatModel, unloadCurrentChatModel } = Llama.useLlama((state) => ({
+    const {
+        currentChatModel,
+        loadProgress,
+        setloadProgress,
+        loadCurrentChatModel,
+        unloadCurrentChatModel,
+    } = Llama.useLlama((state) => ({
         currentChatModel: state.currentChatModel,
         loadProgress: state.loadProgress,
         setloadProgress: state.setLoadProgress,
         loadCurrentChatModel: state.loadCurrentChatModel,
         unloadCurrentChatModel: state.unloadCurrentChatModel,
-    }));
+    }))
 
     // Get RAG model IDs and setters from useEngineData state
-    const { embeddingModelId, ragReasoningModelId, setEmbeddingModelId, setRagReasoningModelId } = Llama.useEngineData((state) => ({
-        embeddingModelId: state.embeddingModelId,
-        ragReasoningModelId: state.ragReasoningModelId,
-        setEmbeddingModelId: state.setEmbeddingModelId,
-        setRagReasoningModelId: state.setRagReasoningModelId,
-    }));
-
+    const { embeddingModelId, ragReasoningModelId, setEmbeddingModelId, setRagReasoningModelId } =
+        Llama.useEngineData((state) => ({
+            embeddingModelId: state.embeddingModelId,
+            ragReasoningModelId: state.ragReasoningModelId,
+            setEmbeddingModelId: state.setEmbeddingModelId,
+            setRagReasoningModelId: state.setRagReasoningModelId,
+        }))
 
     return (
         <View style={styles.mainContainer}>
