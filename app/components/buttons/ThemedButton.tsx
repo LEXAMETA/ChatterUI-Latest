@@ -175,7 +175,7 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
 
     return (
         <AnimatedPressable
-            disabled={variant === 'disabled' || rest.disabled || showActivityIndicator} // Disable button if loading
+            disabled={variant === 'disabled' ?? rest.disabled ?? showActivityIndicator} // Disable button if loading
             onPressIn={(event) => {
                 handlePressIn()
                 if (onPressIn) onPressIn(event)
@@ -198,7 +198,7 @@ const ThemedButton: React.FC<ThemedButtonProps> = ({
             ])}>
             {showActivityIndicator ? (
                 <ActivityIndicator
-                    size={iconSize || (size === 'small' ? 'small' : 'large')} // Adjust spinner size based on button size
+                    size={iconSize ?? (size === 'small' ? 'small' : 'large')} // Adjust spinner size based on button size
                     color={theme.labelStyle.color}
                 />
             ) : (
