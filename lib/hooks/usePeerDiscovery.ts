@@ -141,7 +141,7 @@ export const usePeerDiscovery = () => {
 
   // --- Add WiFi P2P Event Listeners ---
   const addP2PListeners = () => {
-    WiFiP2P.on'peersUpdated'((devices: any[]) => {
+    WiFiP2P.on'peersUpdated',(devices: any[]) => {
       Logger.info(`Discovered ${devices.length} WiFi P2P peers.`)
       // Map discovered devices to our DiscoveredPeerInfo interface
       const newPeers: DiscoveredPeerInfo[] = devices.map((d) => ({
@@ -155,7 +155,7 @@ export const usePeerDiscovery = () => {
       setDiscoveryStatus('Scanning') // Keep status as scanning while peers are updated
     })
 
-    WiFiP2P.on'connectionInfoUpdated'((info: any) => {
+    WiFiP2P.on'connectionInfoUpdated',(info: any) => {
       Logger.info('WiFi P2P Connection Info Updated:', JSON.stringify(info, null, 2))
       setGroupInfo(info) // Save group information
       if (info.groupFormed) {
@@ -198,12 +198,12 @@ export const usePeerDiscovery = () => {
       }
     })
 
-    WiFiP2P.on'thisDeviceChanged'((device: any) => {
+    WiFiP2P.on'thisDeviceChanged',(device: any) => {
       Logger.info('This Device Info Changed:', JSON.stringify(device, null, 2))
       // You can get this device's own P2P details here
     })
 
-    WiFiP2P.on'disconnect'(() => {
+    WiFiP2P.on'disconnect',() => {
       Logger.info('WiFi P2P Disconnected.')
       setDiscoveryStatus('Disconnected')
       setGroupInfo(null)
