@@ -141,75 +141,70 @@ export const usePeerDiscovery = () => {
 
   // --- Add WiFi P2P Event Listeners ---
   const addP2PListeners = () => {
-    WiFiP2P.on'peersUpdated',(devices: any[]) => {
-      Logger.info(`Discovered ${devices.length} WiFi P2P peers.`)
-      // Map discovered devices to our DiscoveredPeerInfo interface
-      const newPeers: DiscoveredPeerInfo[] = devices.map((d) => ({
-        deviceAddress: d.deviceAddress,
-        deviceName: d.deviceName,
-        isConnected: d.status === 'CONNECTED',
-        isGroupOwner: false, // This will be updated after group info is known
-        status: getP2PStatusText(d.status),
-      }))
-      setPeers(newPeers)
-      setDiscoveryStatus('Scanning') // Keep status as scanning while peers are updated
-    })
+  WiFiP2P.on('peersUpdated', (devices: any[]) => {
+    Logger.info(`Discovered ${devices.length} WiFi P2P peers.`)
+    // Map discovered devices to our DiscoveredPeerInfo interface
+    const newPeers: DiscoveredPeerInfo[] = devices.map((d) => ({
+      deviceAddress: d.deviceAddress,
+      deviceName: d.deviceName,
+      isConnected: d.status === 'CONNECTED',
+      isGroupOwner: false, // This will be updated after group info is known
+      status: getP2PStatusText(d.status),
+    }))
+    setPeers(newPeers)
+    setDiscoveryStatus('Scanning') // Keep status as scanning while peers are updated
+  })
 
-    WiFiP2P.on'connectionInfoUpdated',(info: any) => {
-      Logger.info('WiFi P2P Connection Info Updated:', JSON.stringify(info, null, 2))
-      setGroupInfo(info) // Save group information
-      if (info.groupFormed) {
-        Logger.info('P2P Group Formed!')
-        setDiscoveryStatus('Connected')
-        // Now, this is where you'd typically get the IP addresses.
-        // If info.isGroupOwner is true, this device is the GO, others connect to its GO_IP_ADDRESS.
-        // If info.isGroupOwner is false, this device is a client, and info.groupOwnerAddress is the GO's IP.
-        const localIp = info.isGroupOwner ? '192.168.49.1' : info.groupOwnerAddress; // Default P2P group owner IP is often 192.168.49.1
-        Logger.info(`Local IP in P2P group: ${localIp}`)
+  WiFiP2P.on('connectionInfoUpdated', (info: any) => {
+    Logger.info('WiFi P2P Connection Info Updated:', JSON.stringify(info, null, 2))
+    setGroupInfo(info) // Save group information
+    if (info.groupFormed) {
+      Logger.info('P2P Group Formed!')
+      setDiscoveryStatus('Connected')
+      const localIp = info.isGroupOwner ? '192.168.49.1' : info.groupOwnerAddress
+      Logger.info(`Local IP in P2P group: ${localIp}`)
 
-        // Here, you'd iterate through 'peers' and update their 'ipAddress'
-        // based on the connection info, and potentially initiate the AI capability discovery
-        // over the newly formed P2P TCP/IP network.
-        setPeers(prevPeers => prevPeers.map(p => ({
+      setPeers((prevPeers) =>
+        prevPeers.map((p) => ({
           ...p,
-          ipAddress: (p.deviceAddress === info.groupOwnerAddress && !info.isGroupOwner)
-                       ? info.groupOwnerAddress
-                       : (p.deviceAddress === info.deviceAddress && info.isGroupOwner)
-                       ? '192.168.49.1' // This device's GO IP
-                       : p.ipAddress, // Keep existing if not the GO or current client
-          isConnected: info.groupFormed, // All group members are connected to the group
-          isGroupOwner: info.isGroupOwner, // Update this device's GO status
-        })))
-
-        // Immediately after group formation and IP assignment, you would then initiate
-        // your application-level "AI capability discovery" over TCP.
-        // For example: connect to each peer's IP on a pre-defined port (e.g., 8081 for AI info)
-        // and exchange details like model name, load, etc.
-      } else {
-        setDiscoveryStatus('Idle')
-        Logger.info('P2P Group Disbanded.')
-        setGroupInfo(null);
-        setPeers(prevPeers => prevPeers.map(p => ({
-            ...p,
-            ipAddress: undefined, // Clear IP
-            isConnected: false, // No longer connected
-            isGroupOwner: false,
-        })))
-      }
-    })
-
-    WiFiP2P.on'thisDeviceChanged',(device: any) => {
-      Logger.info('This Device Info Changed:', JSON.stringify(device, null, 2))
-      // You can get this device's own P2P details here
-    })
-
-    WiFiP2P.on'disconnect',() => {
-      Logger.info('WiFi P2P Disconnected.')
-      setDiscoveryStatus('Disconnected')
+          ipAddress:
+            p.deviceAddress === info.groupOwnerAddress && !info.isGroupOwner
+              ? info.groupOwnerAddress
+              : p.deviceAddress === info.deviceAddress && info.isGroupOwner
+              ? '192.168.49.1' // This device's GO IP
+              : p.ipAddress, // Keep existing if not the GO or current client
+          isConnected: info.groupFormed,
+          isGroupOwner: info.isGroupOwner,
+        }))
+      )
+    } else {
+      setDiscoveryStatus('Idle')
+      Logger.info('P2P Group Disbanded.')
       setGroupInfo(null)
-      setPeers([]) // Clear peers on full disconnect
-    })
+      setPeers((prevPeers) =>
+        prevPeers.map((p) => ({
+          ...p,
+          ipAddress: undefined,
+          isConnected: false,
+          isGroupOwner: false,
+        }))
+      )
+    }
+  })
+
+  WiFiP2P.on('thisDeviceChanged', (device: any) => {
+    Logger.info('This Device Info Changed:', JSON.stringify(device, null, 2))
+    // You can get this device's own P2P details here
+  })
+
+  WiFiP2P.on('disconnect', () => {
+    Logger.info('WiFi P2P Disconnected.')
+    setDiscoveryStatus('Disconnected')
+    setGroupInfo(null)
+    setPeers([]) // Clear peers on full disconnect
+  })
   }
+  
 
   // --- Helper to get human-readable status text ---
   const getP2PStatusText = (status: number) => {
