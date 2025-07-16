@@ -526,5 +526,5 @@ function textTimings(timings: CompletionTimings): string {
 
 // Export a Llama namespace wrapping the useLlama Zustand hook
 export namespace Llama {
-  export const useLlama = useLlama;
+    export const useLlama = useLlama
 }

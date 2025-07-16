@@ -79,7 +79,7 @@ export namespace Logger {
 
     const formatMessage = (message: string, optionalParams: any[]): string => {
         if (optionalParams.length === 0) return message
-        return message + ' ' + optionalParams.map(p => JSON.stringify(p)).join(' ')
+        return message + ' ' + optionalParams.map((p) => JSON.stringify(p)).join(' ')
     }
 
     export const info = (message: string, ...optionalParams: any[]) => {

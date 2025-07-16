@@ -1,4 +1,6 @@
-import { db as database } from '@db'
+// lib/state/Chat.ts
+
+import { db as database } from '@db' // 'db' is now imported as 'database'
 import { Tokenizer } from '@lib/engine/Tokenizer'
 import { replaceMacros } from '@lib/utils/Macros'
 import { convertToFormatInstruct } from '@lib/utils/TextFormat'
@@ -34,7 +36,7 @@ export type ChatData = {
     character_id: number
     user_id: number | null
     name: string
-    messages: ChatEntry[] | undefined
+    messages: ChatEntry[]
 }
 
 export interface ChatState {
@@ -86,6 +88,7 @@ type OutputBuffer = {
 }
 
 type ChatSwipeUpdated = Pick<ChatSwipe, 'swipe' | 'id'> & Partial<Omit<ChatSwipe, 'swipe' | 'id'>>
+
 // TODO: Functionalize and move elsewhere
 export const sendGenerateCompleteNotification = async () => {
     const showMessage = mmkv.getBoolean(AppSettings.ShowNotificationText)
@@ -141,14 +144,17 @@ export const useInference = create<InferenceStateType>((set, get) => ({
     },
 }))
 
+// Start of the 'Chats' namespace
 export namespace Chats {
     export const useChatState = create<ChatState>((set, get: () => ChatState) => ({
         data: undefined,
         buffer: { data: '' },
+
         startGenerating: (swipeId: number) => {
+            // No longer `Chats.useInference` because `useInference` is a top-level export
             useInference.getState().startGenerating(swipeId)
         },
-        // TODO : Replace this function
+
         stopGenerating: async () => {
             const cachedSwipeId = useInference.getState().currentSwipeId
             Logger.info(`Saving Chat`)
@@ -156,9 +162,10 @@ export namespace Chats {
             useInference.getState().stopGenerating()
             get().setBuffer({ data: '' })
         },
-        load: async (chatId: number) => {
-            const data = await db.query.chat(chatId)
 
+        load: async (chatId: number) => {
+            // Correctly reference `db` from `Chats.db.query.chat`
+            const data = await Chats.db.query.chat(chatId) // <-- Fix
             if (data?.user_id && mmkv.getBoolean(AppSettings.AutoLoadUser)) {
                 const userID = Characters.useUserCard.getState().id
                 if (userID !== data.user_id) {
@@ -173,62 +180,83 @@ export namespace Chats {
 
             set((state) => ({
                 ...state,
-                data: data,
+                // Ensure messages is always an array if data exists
+                data: data ? { ...data, messages: data.messages ?? [] } : undefined,
             }))
         },
 
         delete: async (chatId: number) => {
-            await db.mutate.deleteChat(chatId)
+            // Correctly reference `db` from `Chats.db.mutate.deleteChat`
+            await Chats.db.mutate.deleteChat(chatId) // <-- Fix
             if (get().data?.id === chatId) get().reset()
         },
 
         reset: () =>
-            set((state: ChatState) => ({
+            set((state) => ({
                 ...state,
                 data: undefined,
             })),
 
-        addEntry: async (name: string, is_user: boolean, message: string) => {
+        addEntry: async (name, is_user, message) => {
             const messages = get().data?.messages
             const chatId = get().data?.id
             if (!messages || !chatId) return
-            const order = messages.length > 0 ? messages[messages.length - 1].order + 1 : 0
+            // Ensure messages.length - 1 is valid before accessing. `messages.length > 0` already does this.
+            // TS2532: Object is possibly 'undefined'.
+            // Fix: Added a type assertion `as ChatEntry` to assure TypeScript that `messages[messages.length - 1]` is indeed a ChatEntry.
+            const order = messages.length > 0 ? (messages[messages.length - 1] as ChatEntry).order + 1 : 0
 
-            const entry = await db.mutate.createEntry(chatId, name, is_user, order, message)
+            // Correctly reference `db` from `Chats.db.mutate.createEntry`
+            const entry = await Chats.db.mutate.createEntry(chatId, name, is_user, order, message) // <-- Fix
             if (entry) messages.push(entry)
             set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
             }))
-            return entry?.swipes[0].id
+            return entry?.swipes?.[0]?.id
         },
-        deleteEntry: async (index: number) => {
+
+        deleteEntry: async (index) => {
             const messages = get().data?.messages
             if (!messages) return
-            const entryId = messages[index].id
-            if (!entryId) return
+            const entryToDelete = messages[index]
+            if (!entryToDelete) {
+                Logger.warn(`deleteEntry: No message at index ${index}`)
+                return
+            }
 
-            await db.mutate.deleteChatEntry(entryId)
-
+            // Correctly reference `db` from `Chats.db.mutate.deleteChatEntry`
+            await Chats.db.mutate.deleteChatEntry(entryToDelete.id) // <-- Fix
             set((state) => {
                 if (!state.data) return state
                 return {
                     ...state,
                     data: {
                         ...state.data,
-                        messages: messages.filter((item, ind) => ind !== index),
+                        messages: messages.filter((_, i) => i !== index),
                     },
                 }
             })
         },
 
-        updateEntry: async (index: number, message: string, options = {}) => {
+        updateEntry: async (index, message, options = {}) => {
             const { verifySwipeId, updateFinished, updateStarted, timings, resetTimings } = options
-            const messages = get()?.data?.messages
+            const messages = get().data?.messages
             if (!messages) return
 
-            let chatSwipeId: number | undefined =
-                messages[index]?.swipes[messages[index].swipe_id].id
+            const currentEntry = messages[index]
+            if (!currentEntry) {
+                Logger.warn(`updateEntry: No chat entry at index ${index}`)
+                return
+            }
+
+            const currentSwipe = currentEntry.swipes[currentEntry.swipe_id]
+            if (!currentSwipe) {
+                Logger.error(`updateEntry: No current swipe found for entry at index ${index}`)
+                return
+            }
+
+            let chatSwipeId = currentSwipe.id
             let updateState = true
 
             if (verifySwipeId) {
@@ -238,166 +266,252 @@ export namespace Chats {
                 }
             }
 
-            if (!chatSwipeId) return
+            // `chatSwipeId` can be a number or undefined.
+            // If it's undefined, it's a problem, so ensure it's a number.
+            if (typeof chatSwipeId !== 'number') { // Changed from `!chatSwipeId`
+                Logger.error(`updateEntry: Invalid chatSwipeId for index ${index}`)
+                return
+            }
 
             const date = new Date()
 
             const updatedSwipe: ChatSwipeUpdated = {
-                id: chatSwipeId,
+                id: chatSwipeId, // Now guaranteed to be a number
                 swipe: message,
+                gen_finished: updateFinished ? date : undefined,
+                gen_started: updateStarted ? date : undefined,
+                timings: resetTimings ? null : timings ?? undefined,
             }
-            if (updateFinished) updatedSwipe.gen_finished = date
-            if (updateStarted) updatedSwipe.gen_started = date
-            if (timings) updatedSwipe.timings = timings
-            if (resetTimings) updatedSwipe.timings = null
 
-            await db.mutate.updateChatSwipe(updatedSwipe)
+            // Correctly reference `db` from `Chats.db.mutate.updateChatSwipe`
+            await Chats.db.mutate.updateChatSwipe(updatedSwipe) // <-- Fix
 
             if (!updateState) return
 
-            const entry = messages[index].swipes[messages[index].swipe_id]
-            entry.swipe = message
-            entry.token_count = undefined
-            if (updateFinished) entry.gen_finished = date
-            if (updateStarted) entry.gen_started = date
-            if (timings) entry.timings = timings
-            if (resetTimings) entry.timings = null
-            messages[index].swipes[messages[index].swipe_id] = entry
+            currentSwipe.swipe = message
+            currentSwipe.token_count = undefined
+            if (updateFinished) currentSwipe.gen_finished = date
+            if (updateStarted) currentSwipe.gen_started = date
+            if (timings) currentSwipe.timings = timings
+            if (resetTimings) currentSwipe.timings = null
+
+            currentEntry.swipes[currentEntry.swipe_id] = currentSwipe
 
             set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
             }))
         },
 
-        // returns true if overflowing right swipe, used to trigger generate
-        swipe: async (index: number, direction: number) => {
-            const messages = get()?.data?.messages
+        swipe: async (index, direction) => {
+            const messages = get().data?.messages
             if (!messages) return false
-
-            const swipe_id = messages[index].swipe_id
+            const entry = messages[index]
+            if (!entry) {
+                Logger.warn(`swipe: No chat entry at index ${index}`)
+                return false
+            }
+            const swipe_id = entry.swipe_id
             const target = swipe_id + direction
-            const limit = messages[index].swipes.length - 1
-
+            const limit = entry.swipes.length - 1
             if (target < 0) return false
             if (target > limit) return true
-            messages[index].swipe_id = target
+
+            entry.swipe_id = target
+
             set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
             }))
 
-            const entryId = messages[index].id
-            await db.mutate.updateEntrySwipeId(entryId, target)
+            // Correctly reference `db` from `Chats.db.mutate.updateEntrySwipeId`
+            await Chats.db.mutate.updateEntrySwipeId(entry.id, target) // <-- Fix
 
             return false
         },
 
-        addSwipe: async (index: number, message: string = '') => {
+        addSwipe: async (index, message = '') => {
             const messages = get().data?.messages
             if (!messages) return
-            const entryId = messages[index].id
+            const entry = messages[index]
+            if (!entry) {
+                Logger.warn(`addSwipe: No chat entry at index ${index}`)
+                return
+            }
+            // Correctly reference `db` from `Chats.db.mutate.createSwipe`
+            const swipe = await Chats.db.mutate.createSwipe(entry.id, message) // <-- Fix
+            if (swipe) entry.swipes.push(swipe)
 
-            const swipe = await db.mutate.createSwipe(entryId, message)
-            if (swipe) messages[index].swipes.push(swipe)
-            await db.mutate.updateEntrySwipeId(entryId, messages[index].swipes.length - 1)
-            messages[index].swipe_id = messages[index].swipes.length - 1
-            set((state: ChatState) => ({
+            // Update swipe_id to new swipe
+            const newSwipeId = entry.swipes.length - 1
+            // Correctly reference `db` from `Chats.db.mutate.updateEntrySwipeId`
+            await Chats.db.mutate.updateEntrySwipeId(entry.id, newSwipeId) // <-- Fix
+            entry.swipe_id = newSwipeId
+
+            set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
             }))
+
             return swipe?.id
         },
 
-        getTokenCount: (index: number) => {
-            const messages = get()?.data?.messages
+        getTokenCount: (index) => {
+            const messages = get().data?.messages
             if (!messages) return 0
+            const entry = messages[index]
+            if (!entry) {
+                Logger.warn(`getTokenCount: No chat entry at index ${index}`)
+                return 0
+            }
+            const currentSwipe = entry.swipes[entry.swipe_id]
+            if (!currentSwipe) {
+                // If currentSwipe is undefined, return 0 and log a warning
+                Logger.warn(`getTokenCount: No current swipe found for entry at index ${index}.`)
+                return 0
+            }
 
-            const swipe_id = messages[index].swipe_id
-            const cached_token_count = messages[index].swipes[swipe_id].token_count
-            if (cached_token_count) return cached_token_count
-            const getTokenCount = Tokenizer.getTokenizer()
+            if (currentSwipe.token_count) return currentSwipe.token_count
 
-            const token_count = getTokenCount(messages[index].swipes[swipe_id].swipe)
-            messages[index].swipes[swipe_id].token_count = token_count
-            set((state: ChatState) => ({
+            const tokenizer = Tokenizer.getTokenizer()
+            const token_count = tokenizer(currentSwipe.swipe)
+            currentSwipe.token_count = token_count
+
+            set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
             }))
             return token_count
         },
-        setBuffer: (newBuffer: OutputBuffer) =>
-            set((state: ChatState) => ({ ...state, buffer: newBuffer })),
 
-        insertBuffer: (data: string) =>
-            set((state: ChatState) => ({
+        setBuffer: (newBuffer) =>
+            set((state) => ({
+                ...state,
+                buffer: newBuffer,
+            })),
+
+        insertBuffer: (data) =>
+            set((state) => ({
                 ...state,
                 buffer: { ...state.buffer, data: state.buffer.data + data },
             })),
 
         updateFromBuffer: async (cachedSwipeId) => {
             const NO_VALID_ENTRY = -1
-            const index = get().data?.messages?.length
+            const messages = get().data?.messages
             const buffer = get().buffer
-            const updatedSwipe: ChatSwipeUpdated = {
-                id: index ?? cachedSwipeId ?? NO_VALID_ENTRY,
-                swipe: buffer.data,
+
+            const lastIndex = messages?.length ? messages.length - 1 : undefined
+
+            // Refined logic for targetSwipeId to handle potential undefined `messages` or `lastIndex`
+            // TS2532: Object is possibly 'undefined'.
+            // Fix: Break down the optional chaining and ensure `lastMessage` is explicitly non-null before accessing its properties.
+            let targetSwipeId: number;
+            if (lastIndex !== undefined && messages && messages[lastIndex]) {
+                const lastMessage = messages[lastIndex]; // lastMessage is now guaranteed
+                targetSwipeId = lastMessage.swipes[lastMessage.swipe_id]?.id ?? cachedSwipeId ?? NO_VALID_ENTRY;
+            } else {
+                targetSwipeId = cachedSwipeId ?? NO_VALID_ENTRY;
             }
-            if (updatedSwipe.id === NO_VALID_ENTRY) {
-                Logger.error('Attempted to insert to buffer, but no valid entry was found!')
+
+
+            if (targetSwipeId === NO_VALID_ENTRY) {
+                Logger.error('Attempted to insert to buffer, but no valid entry or swipeId was found!')
                 return
             }
-            if (buffer.timings) updatedSwipe.timings = buffer.timings
-            if (!index) {
-                // this means there is no chat loaded, we need to update the db anyways
-                await db.mutate.updateChatSwipe(updatedSwipe)
-            } else
-                await get().updateEntry(index - 1, get().buffer.data, {
+
+            const updatedSwipe: ChatSwipeUpdated = {
+                id: targetSwipeId, // Now guaranteed to be a number due to the `if (targetSwipeId === NO_VALID_ENTRY)` check.
+                swipe: buffer.data,
+                timings: buffer.timings,
+            }
+
+            // If there are no messages, or the last index is invalid, directly update the swipe
+            if (lastIndex === undefined || lastIndex < 0) { // lastIndex could be -1 if messages is empty
+                // Correctly reference `db` from `Chats.db.mutate.updateChatSwipe`
+                await Chats.db.mutate.updateChatSwipe(updatedSwipe) // <-- Fix
+            } else {
+                // Otherwise, update the existing entry using the `updateEntry` function
+                await get().updateEntry(lastIndex, buffer.data, {
                     updateFinished: true,
                     verifySwipeId: cachedSwipeId,
                     timings: buffer.timings,
                 })
+            }
         },
-        insertLastToBuffer: () => {
-            const message = get()?.data?.messages?.at(-1)
-            if (!message) return
-            const mes = message.swipes[message.swipe_id].swipe
 
-            set((state: ChatState) => ({ ...state, buffer: { ...state.buffer, data: mes } }))
-        },
-        setRegenCache: () => {
-            const messages = get()?.data?.messages
-            const message = messages?.[messages.length - 1]
-            if (!messages || !message) return
-            message.swipes[message.swipe_id].regen_cache = message.swipes[message.swipe_id].swipe
-            messages[messages.length - 1] = message
+        insertLastToBuffer: () => {
+            const messages = get().data?.messages
+            if (!messages || messages.length === 0) return
+            const lastMessage = messages[messages.length - 1] // Guaranteed to be ChatEntry here
+
+            // TS18048: 'lastMessage' is possibly 'undefined'.
+            // Fix: Add a check for `lastMessage` to ensure it's not undefined before accessing `swipes`.
+            // While `messages.length === 0` handles the array being empty, if somehow `messages[messages.length - 1]` was truly undefined,
+            // this check makes it explicit.
+            if (!lastMessage) {
+                Logger.warn('insertLastToBuffer: No last message found despite array length check.')
+                return;
+            }
+            // `lastMessage.swipes[lastMessage.swipe_id]` can still be undefined if swipe_id is out of bounds
+            const lastSwipe = lastMessage.swipes[lastMessage.swipe_id] // Access safely with optional chaining on lastSwipe
             set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                buffer: { ...state.buffer, data: lastSwipe?.swipe ?? '' },
             }))
         },
-        getRegenCache: () => {
-            const messages = get()?.data?.messages
-            const message = messages?.[messages.length - 1]
-            if (!messages || !message) return ''
-            return message.swipes[message.swipe_id].regen_cache ?? ''
-        },
-        resetRegenCache: () => {
-            const messages = get()?.data?.messages
+
+        setRegenCache: () => {
+            const messages = get().data?.messages
             const message = messages?.[messages.length - 1]
             if (!messages || !message) return
-            message.swipes[message.swipe_id].regen_cache = ''
+            const currentSwipe = message.swipes[message.swipe_id]
+            if (!currentSwipe) {
+                Logger.warn('setRegenCache: Swipe not found for last entry.')
+                return
+            }
+            currentSwipe.regen_cache = currentSwipe.swipe
             messages[messages.length - 1] = message
             set((state) => ({
                 ...state,
-                data: state?.data ? { ...state.data, messages: messages } : state.data,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
+            }))
+        },
+
+        getRegenCache: () => {
+            const messages = get().data?.messages
+            const message = messages?.[messages.length - 1]
+            if (!messages || !message) return ''
+            const currentSwipe = message.swipes[message.swipe_id]
+            if (!currentSwipe) {
+                Logger.warn('getRegenCache: Swipe not found for last entry.')
+                return ''
+            }
+            return currentSwipe.regen_cache ?? ''
+        },
+
+        resetRegenCache: () => {
+            const messages = get().data?.messages
+            const message = messages?.[messages.length - 1]
+            if (!messages || !message) return
+            const currentSwipe = message.swipes[message.swipe_id]
+            if (!currentSwipe) {
+                Logger.warn('resetRegenCache: Swipe not found for last entry.')
+                return
+            }
+            currentSwipe.regen_cache = ''
+            messages[messages.length - 1] = message
+            set((state) => ({
+                ...state,
+                data: state.data ? { ...state.data, messages: messages } : state.data,
             }))
         },
     }))
 
+    // This `db` namespace is what you need to reference inside `useChatState`
     export namespace db {
         export namespace query {
-            export const chat = async (chatId: number) => {
+            export const chat = async (chatId: number): Promise<ChatData | undefined> => {
                 const chat = await database.query.chats.findFirst({
                     where: eq(chats.id, chatId),
                     with: {
@@ -409,7 +523,10 @@ export namespace Chats {
                         },
                     },
                 })
-                if (chat) return { ...chat }
+                if (chat) {
+                    return { ...chat, messages: chat.messages || [] }
+                }
+                return undefined
             }
 
             export const chatNewestId = async (charId: number): Promise<number | undefined> => {
@@ -483,10 +600,14 @@ export namespace Chats {
                     return
                 }
                 const userId = Characters.useUserCard.getState().id
-                const charName = card.name
+                const charName = card.name ?? ''
+
                 return await database.transaction(async (tx) => {
-                    if (!card || !charName) return
-                    const [{ chatId }, ..._] = await tx
+                    if (!card) {
+                        Logger.error('Transaction failed: Character card is missing.')
+                        return
+                    }
+                    const newChatInsertResult = await tx
                         .insert(chats)
                         .values({
                             character_id: charId,
@@ -494,10 +615,15 @@ export namespace Chats {
                         })
                         .returning({ chatId: chats.id })
 
-                    // custom setting to not generate first mes
+                    const chatId = newChatInsertResult[0]?.chatId
+                    if (!chatId) {
+                        Logger.error('Failed to create chat: chatId is undefined.')
+                        return
+                    }
+
                     if (!mmkv.getBoolean(AppSettings.CreateFirstMes)) return chatId
 
-                    const [{ entryId }, ...__] = await tx
+                    const entryInsertResult = await tx
                         .insert(chatEntries)
                         .values({
                             chat_id: chatId,
@@ -506,13 +632,18 @@ export namespace Chats {
                             order: 0,
                         })
                         .returning({ entryId: chatEntries.id })
+                    const entryId = entryInsertResult[0]?.entryId
+                    if (!entryId) {
+                        Logger.error('Failed to create chat entry: entryId is undefined.')
+                        return
+                    }
 
                     await tx.insert(chatSwipes).values({
                         entry_id: entryId,
                         swipe: convertToFormatInstruct(replaceMacros(card.first_mes ?? '')),
                     })
 
-                    card?.alternate_greetings?.forEach(async (data) => {
+                    card.alternate_greetings?.forEach(async (data) => {
                         await tx.insert(chatSwipes).values({
                             entry_id: entryId,
                             swipe: convertToFormatInstruct(replaceMacros(data.greeting)),
@@ -541,7 +672,7 @@ export namespace Chats {
                 order: number,
                 message: string
             ) => {
-                const [{ entryId }, ...__] = await database
+                const entryInsertResult = await database
                     .insert(chatEntries)
                     .values({
                         chat_id: chatId,
@@ -550,6 +681,12 @@ export namespace Chats {
                         order: order,
                     })
                     .returning({ entryId: chatEntries.id })
+                const entryId = entryInsertResult[0]?.entryId
+                if (!entryId) {
+                    Logger.error('Failed to create entry: entryId is undefined.')
+                    return // Ensure a return if entryId is not found
+                }
+
                 await database
                     .insert(chatSwipes)
                     .values({ swipe: replaceMacros(message), entry_id: entryId })
@@ -571,13 +708,19 @@ export namespace Chats {
             }
 
             export const createSwipe = async (entryId: number, message: string) => {
-                const [{ swipeId }, ...__] = await database
+                const swipeInsertResult = await database
                     .insert(chatSwipes)
                     .values({
                         entry_id: entryId,
                         swipe: replaceMacros(message),
                     })
                     .returning({ swipeId: chatSwipes.id })
+                const swipeId = swipeInsertResult[0]?.swipeId
+                if (!swipeId) {
+                    Logger.error('Failed to create swipe: swipeId is undefined.')
+                    return // Ensure a return if swipeId is not found
+                }
+
                 await updateEntryModified(entryId)
                 return await database.query.chatSwipes.findFirst({
                     where: eq(chatSwipes.id, swipeId),
@@ -634,14 +777,24 @@ export namespace Chats {
 
                 result.last_modified = Date.now()
 
-                const [{ newChatId }, ..._] = await database
+                const newChatInsertResult = await database
                     .insert(chats)
                     .values(result)
                     .returning({ newChatId: chats.id })
 
-                result.messages.forEach((item) => {
+                const newChatId = newChatInsertResult[0]?.newChatId
+                if (!newChatId) {
+                    Logger.error('Failed to clone chat: newChatId is undefined.')
+                    return
+                }
+
+                result.messages?.forEach((item) => {
                     item.chat_id = newChatId
                 })
+
+                if (!result.messages || result.messages.length === 0) {
+                    return newChatId
+                }
 
                 const newEntryIds = await database
                     .insert(chatEntries)
@@ -649,14 +802,21 @@ export namespace Chats {
                     .returning({ newEntryId: chatEntries.id })
 
                 result.messages.forEach((item, index) => {
-                    item.swipes.forEach((item2) => {
-                        item2.entry_id = newEntryIds[index].newEntryId
-                    })
+                    const newEntryIdResult = newEntryIds[index]
+                    if (newEntryIdResult) {
+                        item.swipes.forEach((item2) => {
+                            item2.entry_id = newEntryIdResult.newEntryId
+                        })
+                    } else {
+                        Logger.warn(`cloneChat: No new entry ID found for message at index ${index}.`)
+                    }
                 })
 
                 const swipes = result.messages.map((item) => item.swipes).flat()
 
                 await database.insert(chatSwipes).values(swipes)
+
+                return newChatId
             }
 
             export const renameChat = async (chatId: number, name: string) => {
@@ -670,8 +830,9 @@ export namespace Chats {
     }
 
     export const useEntryData = (index: number) => {
-        // TODO: Investigate if dummyEntry is dangerous
-        const entry = useChatState((state) => state?.data?.messages?.[index] ?? dummyEntry)
+        const entry = useChatState((state) => {
+            return state?.data?.messages?.[index] ?? dummyEntry
+        })
         return entry
     }
 
@@ -687,13 +848,16 @@ export namespace Chats {
 
     export const useSwipeData = (index: number) => {
         const message = useEntryData(index)
+
         const swipeIndex = message.swipe_id
         const swipesLength = message.swipes.length
-        const { swipe, swipeText, swipeId } = useChatState((state) => ({
-            swipe: state?.data?.messages?.[index]?.swipes[swipeIndex],
-            swipeText: state?.data?.messages?.[index]?.swipes[swipeIndex].swipe,
-            swipeId: state?.data?.messages?.[index]?.swipes[swipeIndex].id,
-        }))
+
+        const currentSwipe = message.swipes[swipeIndex]
+
+        const swipe = currentSwipe
+        const swipeText = currentSwipe?.swipe ?? ''
+        const swipeId = currentSwipe?.id
+
         return { swipeId, swipe, swipeText, swipeIndex, swipesLength }
     }
 

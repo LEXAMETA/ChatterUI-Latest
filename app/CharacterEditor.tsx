@@ -47,8 +47,8 @@ const SamplerMenu = () => {
         if (activeIndex !== -1) {
             // TS2532: Object is possibly 'undefined'. (on apiValues[activeIndex])
             // Added check for `apiValues[activeIndex]` before accessing `configName`.
-            const currentApiConfig = apiValues[activeIndex];
-            if (!currentApiConfig) return []; // Guard against undefined config
+            const currentApiConfig = apiValues[activeIndex]
+            if (!currentApiConfig) return [] // Guard against undefined config
 
             const template = getTemplates().find(
                 (item) => item.name === currentApiConfig.configName
@@ -163,10 +163,10 @@ const SamplerMenu = () => {
                         return
                     }
 
+                    // TS18048: 'currentConfig' is possibly 'undefined'.
+                    // Added check for `currentConfig` before trying to use its `data`.
+                    // Also, ensure `item.name` is compared to `text` not `currentConfig.name`
                     for (const item of configList)
-                        // TS18048: 'currentConfig' is possibly 'undefined'.
-                        // Added check for `currentConfig` before trying to use its `data`.
-                        // Also, ensure `item.name` is compared to `text` not `currentConfig.name`
                         if (item.name === text) {
                             Logger.errorToast(`Sampler name already exists.`)
                             return
@@ -176,7 +176,9 @@ const SamplerMenu = () => {
                     if (currentConfig) {
                         addSamplerConfig({ name: text, data: currentConfig.data })
                     } else {
-                        Logger.errorToast('Cannot add sampler: No current configuration to copy data from.')
+                        Logger.errorToast(
+                            'Cannot add sampler: No current configuration to copy data from.'
+                        )
                     }
                 }}
             />
@@ -281,7 +283,9 @@ const SamplerMenu = () => {
                             //case 'custom':
                             default:
                                 return (
-                                    <Text key={item.samplerID} style={styles.warningText}>Invalid Sampler Field!</Text>
+                                    <Text key={item.samplerID} style={styles.warningText}>
+                                        Invalid Sampler Field!
+                                    </Text>
                                 )
                         }
                     })}
@@ -328,4 +332,3 @@ const useStyles = () => {
         },
     })
 }
-

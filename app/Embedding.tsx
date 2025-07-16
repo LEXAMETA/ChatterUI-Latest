@@ -100,7 +100,6 @@ const insertData = async () => {
 interface EmbeddingScreenProps {}
 
 export default function EmbeddingScreen(props: EmbeddingScreenProps) {
-  // Get the complete theme object
   const theme = Theme.useTheme();
 
   const [loadingFile, setLoadingFile] = useState(false);
@@ -113,9 +112,9 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
     getEmbedding: state.getEmbedding,
   }));
 
-  const [textInput1, setTextInput1] = useState<string>('');
-  const [textInput2, setTextInput2] = useState<string>('');
-  const [embeddingOutput, setEmbeddingOutput] = useState<string>('');
+  const [textInput1, setTextInput1] = useState('');
+  const [textInput2, setTextInput2] = useState('');
+  const [embeddingOutput, setEmbeddingOutput] = useState('');
 
   const llamaConfig: ContextParams = {
     model: AppDirectory.ModelPath + 'allminifp16.gguf',
@@ -142,7 +141,6 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
 
       if (content != null) {
         setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
-        // Place to add embedding or processing logic
       } else {
         setError('Failed to read file content.');
       }
@@ -166,11 +164,8 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
       const data = await rawdb.getAllAsync(
         `select id, distance from vec_examples where sample_embedding match '${inputVector}' order by distance limit 1`
       );
-      console.log('Query Input:', inputVector);
-      console.log('Query Result:', data);
       setEmbeddingOutput(`Query Result: ${JSON.stringify(data)}\nTime: ${(performance.now() - now).toFixed(2)}ms`);
     } catch (e: any) {
-      console.error('Error querying database:', e);
       setEmbeddingOutput(`Error querying DB: ${e.message}`);
     }
   };
@@ -188,7 +183,6 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
       return;
     }
 
-    // Explicitly type to satisfy TypeScript's strictness after null check
     const embedding1: number[] = v1.embedding;
     const embedding2: number[] = v2.embedding;
 
@@ -198,10 +192,9 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
 
     const minLength = Math.min(embedding1.length, embedding2.length);
     for (let i = 0; i < minLength; i++) {
-      dotprod += embedding1[i] * embedding2[i];
-      // Type assertion or prior non-null check handles 'possibly undefined'
-      s1 += embedding1[i]! ** 2; // Add non-null assertion here
-      s2 += embedding2[i]! ** 2; // Add non-null assertion here
+      dotprod += embedding1[i]! * embedding2[i]!; // <-- Non-null assertion added here!
+      s1 += embedding1[i]! ** 2;
+      s2 += embedding2[i]! ** 2;
     }
 
     const similarity = dotprod / (Math.sqrt(s1) * Math.sqrt(s2));
@@ -209,14 +202,14 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.color.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.color.neutral._100 }]}>
       <SectionTitle>RAG Dataset Management</SectionTitle>
       <Button title="Load Dataset from Device" onPress={handlePickDataset} disabled={loadingFile} />
 
-      {loadingFile && <ActivityIndicator color={theme.color.primary} style={styles.indicator} />}
+      {loadingFile && <ActivityIndicator color={theme.color.primary._500} style={styles.indicator} />}
       {fileName && <Text style={[styles.text, { color: theme.color.text._900 }]}>Selected File: {fileName}</Text>}
       {fileContentPreview && (
-        <View style={[styles.previewContainer, { backgroundColor: theme.color.card }]}>
+        <View style={[styles.previewContainer, { backgroundColor: theme.color.neutral._100 }]}>
           <Text style={[styles.previewText, { color: theme.color.text._900 }]}>
             Content Preview:{"\n"}
             {fileContentPreview}
@@ -228,8 +221,8 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
       <View style={styles.separator} />
 
       <SectionTitle>Llama Embedding & Vector DB</SectionTitle>
-      <TouchableOpacity onPress={() => loadModel(llamaConfig)} style={[styles.button, { backgroundColor: theme.color.primary }]}>
-        <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Load Llama Embedding Model</Text>
+      <TouchableOpacity onPress={() => loadModel(llamaConfig)} style={[styles.button, { backgroundColor: theme.color.primary._500 }]}>
+        <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Load Llama Embedding Model</Text>
       </TouchableOpacity>
 
       <TextInput
@@ -246,8 +239,8 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
         placeholderTextColor={theme.color.text._400}
         style={[styles.textInput, { color: theme.color.text._100, borderColor: theme.color.text._400 }]}
       />
-      <TouchableOpacity onPress={handleTestEmbedding} style={[styles.button, { backgroundColor: theme.color.accent }]}>
-        <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Calculate Embedding Similarity</Text>
+      <TouchableOpacity onPress={handleTestEmbedding} style={[styles.button, { backgroundColor: theme.color.primary._500 }]}>
+        <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Calculate Embedding Similarity</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => {
@@ -255,9 +248,9 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
           setTextInput2('');
           setEmbeddingOutput('');
         }}
-        style={[styles.button, { backgroundColor: theme.color.secondary }]}
+        style={[styles.button, { backgroundColor: theme.color.neutral._500 }]}
       >
-        <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Clear Text Inputs</Text>
+        <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Clear Text Inputs</Text>
       </TouchableOpacity>
 
       {embeddingOutput && (
@@ -268,17 +261,17 @@ export default function EmbeddingScreen(props: EmbeddingScreenProps) {
 
       <SectionTitle>Vector Database Operations</SectionTitle>
       <View style={styles.dbButtonContainer}>
-        <TouchableOpacity onPress={deleteTables} style={[styles.smallButton, { backgroundColor: theme.color.error }]}>
-          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Delete DB</Text>
+        <TouchableOpacity onPress={deleteTables} style={[styles.smallButton, { backgroundColor: theme.color.error._500 }]}>
+          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Delete DB</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={createTables} style={[styles.smallButton, { backgroundColor: theme.color.primary }]}>
-          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Make DB</Text>
+        <TouchableOpacity onPress={createTables} style={[styles.smallButton, { backgroundColor: theme.color.primary._500 }]}>
+          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Make DB</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={insertData} style={[styles.smallButton, { backgroundColor: theme.color.secondary }]}>
-          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Insert Data</Text>
+        <TouchableOpacity onPress={insertData} style={[styles.smallButton, { backgroundColor: theme.color.neutral._500 }]}>
+          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Insert Data</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleQueryDatabase} style={[styles.smallButton, { backgroundColor: theme.color.accent }]}>
-          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Query DB</Text>
+        <TouchableOpacity onPress={handleQueryDatabase} style={[styles.smallButton, { backgroundColor: theme.color.primary._500 }]}>
+          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Query DB</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -309,7 +302,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 12,
-    color: 'red', // This might be overridden by the theme.color.error._500
+    color: 'red',
   },
   separator: {
     height: 1,
