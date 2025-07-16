@@ -307,3 +307,7 @@ export type CompletionTimings = {
     prompt_ms: number
     prompt_n: number
 }
+
+// ADD THIS FOR YOUR ERROR FIX
+
+export type ModelType = 'main_chat' | 'rag_embedding' | 'rag_reasoning'

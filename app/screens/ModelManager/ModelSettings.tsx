@@ -2,13 +2,14 @@
 
 import ThemedButton from '@components/buttons/ThemedButton'
 import PopupMenu from '@components/views/PopupMenu'
-import * as LlamaModule from '@lib/engine/Local/LlamaLocal' // Import as namespace
+import * as LlamaModule from '@lib/engine/Local/LlamaLocal'
 // Import GGMLNameMap and GGMLType from the GGML utility file
-import { GGMLNameMap, GGMLType } from '@lib/engine/Local/GGML' // Corrected import
+import { GGMLNameMap, GGMLType } from '@lib/engine/Local/GGML'
 import { Theme } from '@lib/theme/ThemeManager'
 import { ModelDataType } from 'db/schema'
 import * as DocumentPicker from 'expo-document-picker'
-import { readDirectoryAsync, getInfoAsync } from 'expo-file-system'
+// IMPORT FileSystem and getInfoAsync DIRECTLY from expo-file-system
+import * as FileSystem from 'expo-file-system'
 import { useEffect, useState } from 'react'
 import {
     ScrollView,
@@ -22,10 +23,14 @@ import {
 } from 'react-native'
 import { Switch } from 'react-native-gesture-handler'
 
+// IMPORT LlamaContext DIRECTLY from cui-llama.rn
+import { LlamaContext } from 'cui-llama.rn'
+
 // IMPORTANT: Verify these paths in your tsconfig.json/babel.config.js
-import { AppSettings } from '@constants/GlobalValues'
+import { AppSettings, useEngineData, EngineDataProps } from '@constants/GlobalValues' // IMPORT useEngineData and EngineDataProps directly
 import { Logger } from '@state/Logger'
 import { useMMKVBoolean } from '@storage/MMKV'
+import { readableFileSize } from '@lib/utils/File' // IMPORT readableFileSize directly
 
 import AntDesign from '@expo/vector-icons/AntDesign'
 
@@ -69,12 +74,13 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         null
     )
 
+    // Use useEngineData directly, no longer through LlamaModule
     const {
         selectedEmbeddingLoRAUri,
         selectedReasoningLoRAUri,
         setSelectedEmbeddingLoRAUri,
         setSelectedReasoningLoRAUri,
-    } = LlamaModule.useEngineData((state: LlamaModule.EngineDataProps) => ({
+    } = useEngineData((state: EngineDataProps) => ({ // Use EngineDataProps directly
         selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
         selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
         setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
@@ -87,17 +93,17 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
     useEffect(() => {
         const loadLoRAs = async () => {
-            const loraPath = `${LlamaModule.AppDirectory.LoRAPath}` // Now correctly includes LoRAPath
-            const info = await getInfoAsync(loraPath)
+            const loraPath = `${LlamaModule.AppDirectory.LoRAPath}` // LlamaModule.AppDirectory is correct as AppDirectory is now exported from LlamaLocal.ts
+            const info = await FileSystem.getInfoAsync(loraPath) // Use FileSystem directly
             if (!info.exists) {
-                await LlamaModule.FileSystem.makeDirectoryAsync(loraPath)
+                await FileSystem.makeDirectoryAsync(loraPath) // Use FileSystem directly
             }
 
-            const files = await readDirectoryAsync(loraPath)
+            const files = await FileSystem.readDirectoryAsync(loraPath) // Use FileSystem directly
             const loraFiles: FileEntry[] = []
             for (const file of files) {
                 const uri = `${loraPath}${file}`
-                const fileInfo = await getInfoAsync(uri)
+                const fileInfo = await FileSystem.getInfoAsync(uri) // Use FileSystem directly
                 if (fileInfo.exists && fileInfo.isDirectory === false) {
                     loraFiles.push({ name: file, uri: uri, size: fileInfo.size })
                 }
@@ -114,7 +120,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 const found = loraFiles.find((l) => l.uri === selectedReasoningLoRAUri)
                 setSelectedReasoningLoRALocal(found ?? null)
             } else {
-                setSelectedReasoningLoRALocal(null)
+                setSelectedReasoningLoCAL(null)
             }
         }
         loadLoRAs()
@@ -127,25 +133,24 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
             copyToCacheDirectory: false,
         })
 
-        // Improved type narrowing for DocumentPickerResult
         if (result.canceled || !result.assets || result.assets.length === 0) {
             return
         }
 
-        const file = result.assets[0]; // 'file' is now definitely DocumentPickerAsset
+        const file = result.assets[0] // TypeScript now knows 'file' is DocumentPickerAsset
 
-        const targetPath = `${LlamaModule.AppDirectory.LoRAPath}${file.name}` // 'file.name' is safe
+        const targetPath = `${LlamaModule.AppDirectory.LoRAPath}${file.name}`
 
         Logger.infoToast(`Copying ${type} file...`)
         try {
-            await LlamaModule.FileSystem.copyAsync({
-                from: file.uri, // 'file.uri' is safe
+            await FileSystem.copyAsync({ // Use FileSystem directly
+                from: file.uri,
                 to: targetPath,
             })
-            const fileInfo = await getInfoAsync(targetPath)
+            const fileInfo = await FileSystem.getInfoAsync(targetPath) // Use FileSystem directly
             if (fileInfo.exists) {
                 const newLoRAEntry: FileEntry = {
-                    name: file.name, // 'file.name' is safe
+                    name: file.name,
                     uri: targetPath,
                     size: fileInfo.size,
                 }
@@ -174,19 +179,22 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         let modelIdToLoad: number | null | undefined
         let loraUriToLoad: string | null
         let setModelIdFunc: (id: number | null) => void
-        let getLlamaContextFunc: (loraPath: string | null) => Promise<LlamaModule.LlamaContext | null>
+        // LlamaContext is now imported directly
+        let getLlamaContextFunc: (loraPath: string | null) => Promise<LlamaContext | null>
         let modelTypeName: ModelDataType['model_type']
 
         if (contextType === 'embedding') {
             modelIdToLoad = embeddingModelId
             loraUriToLoad = selectedEmbeddingLoRALocal?.uri ?? null
             setModelIdFunc = setEmbeddingModelId
+            // Use the directly exported function
             getLlamaContextFunc = LlamaModule.getEmbeddingLlamaContext
             modelTypeName = 'rag_embedding'
         } else {
             modelIdToLoad = ragReasoningModelId
-            loraUriToLoad = selectedReasoningLoRALocal?.uri ?? null
+            loraUriToLoad = selectedReasoningLoCAL?.uri ?? null
             setModelIdFunc = setRagReasoningModelId
+            // Use the directly exported function
             getLlamaContextFunc = LlamaModule.getRagReasoningLlamaContext
             modelTypeName = 'rag_reasoning'
         }
@@ -241,8 +249,10 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         setModelLoading(true)
         try {
             if (contextType === 'embedding') {
+                // Use the directly exported function
                 await LlamaModule.unloadEmbeddingLlamaContext()
             } else {
+                // Use the directly exported function
                 await LlamaModule.unloadRagReasoningLlamaContext()
             }
             Logger.infoToast(`${contextType} model unloaded.`)
@@ -258,7 +268,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         contextType: ModelDataType['model_type'],
         title: string,
         onSelectId: (id: number | null) => void,
-        loadedContextModel: ModelDataType | null | undefined // Ensure nullable
+        loadedContextModel: ModelDataType | null | undefined
     ) => {
         const filteredModels = models.filter((m) => m.model_type === contextType)
         const selectedModel = filteredModels.find((m) => m.id === currentModelId)
@@ -273,7 +283,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <Text style={styles.sectionTitle}>{title} Base Model</Text>
                 <PopupMenu
                     placement="top"
-                    icon="caretdown" as AntDesignIconNames // Explicitly cast
+                    icon="caretdown" // Removed `as AntDesignIconNames` after prop name
                     disabled={disabled}
                     options={
                         filteredModels.length > 0
@@ -305,7 +315,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                         Type: {selectedModel.model_type} | Quant:{' '}
                         {/* Correctly type index for GGMLNameMap */}
                         {GGMLNameMap[parseInt(selectedModel.quantization) as GGMLType]}{' '}
-                        | Size: {LlamaModule.readableFileSize(selectedModel.file_size)}
+                        | Size: {readableFileSize(selectedModel.file_size)} {/* Use directly imported readableFileSize */}
                     </Text>
                 )}
             </View>
@@ -325,7 +335,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <Text style={styles.sectionTitle}>{title} LoRA Adapter</Text>
                 <PopupMenu
                     placement="top"
-                    icon="caretdown" as AntDesignIconNames
+                    icon="caretdown" // Removed `as AntDesignIconNames` after prop name
                     disabled={disabled}
                     options={[
                         ...(availableLoRAs.length > 0
@@ -361,7 +371,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 </PopupMenu>
                 {selectedFile && (
                     <Text style={styles.selectedModelInfo}>
-                        Size: {LlamaModule.readableFileSize(selectedFile.size)}
+                        Size: {readableFileSize(selectedFile.size)} {/* Use directly imported readableFileSize */}
                     </Text>
                 )}
             </View>
@@ -369,7 +379,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }
 
     // Get currently loaded RAG models from LlamaModule.useLlama.getState()
-    // Now these properties exist on LlamaState
     const { loadedEmbeddingModelInContext: currentEmbeddingContextModel, loadedRagReasoningModelInContext: currentReasoningContextModel } = LlamaModule.useLlama.getState();
 
 
@@ -390,7 +399,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <ThemedButton
                     label={
                         modelLoading &&
-                        currentEmbeddingContextModel?.id === embeddingModelId // Use new Zustand state
+                        currentEmbeddingContextModel?.id === embeddingModelId
                             ? 'Loading...'
                             : 'Load Embedding Context'
                     }
@@ -398,7 +407,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                     disabled={!embeddingModelId || modelLoading || modelImporting}
                     showActivityIndicator={
                         modelLoading &&
-                        currentEmbeddingContextModel?.id === embeddingModelId // Use new Zustand state
+                        currentEmbeddingContextModel?.id === embeddingModelId
                     }
                     size="small"
                 />
@@ -427,7 +436,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <ThemedButton
                     label={
                         modelLoading &&
-                        currentReasoningContextModel?.id === ragReasoningModelId // Use new Zustand state
+                        currentReasoningContextModel?.id === ragReasoningModelId
                             ? 'Loading...'
                             : 'Load Reasoning Context'
                     }
@@ -435,7 +444,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                     disabled={!ragReasoningModelId || modelLoading || modelImporting}
                     showActivityIndicator={
                         modelLoading &&
-                        currentReasoningContextModel?.id === ragReasoningModelId // Use new Zustand state
+                        currentReasoningContextModel?.id === ragReasoningModelId
                     }
                     size="small"
                 />

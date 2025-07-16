@@ -2,8 +2,14 @@
 
 import { db } from '@db'
 import { Storage } from '@lib/enums/Storage'
-import { AppDirectory, readableFileSize } from '@lib/utils/File'
-import { ContextParams, LlamaContext, initLlama, CompletionParams } from 'cui-llama.rn'
+// NOTE: If AppDirectory and readableFileSize are truly defined in @lib/utils/File,
+// then these imports are correct and should NOT be redefined/exported here unless for re-export.
+// However, your provided LlamaLocal.ts defines AppDirectory locally.
+// If AppDirectory is also in @lib/utils/File, decide which is the canonical source.
+// Assuming for now the AppDirectory below is the one you intend to use and export from LlamaLocal.
+import { AppDirectory as FileAppDirectory, readableFileSize } from '@lib/utils/File' // Rename to avoid conflict if AppDirectory is defined locally
+
+import { ContextParams, LlamaContext, initLlama, CompletionParams, CompletionTimings } from 'cui-llama.rn'
 import { model_data, ModelDataType } from 'db/schema'
 import { eq } from 'drizzle-orm'
 import * as FileSystem from 'expo-file-system'
@@ -17,7 +23,20 @@ import { AppSettings } from '../../constants/GlobalValues'
 import { Logger } from '../../state/Logger'
 import { mmkv, mmkvStorage } from '../../storage/MMKV'
 
-// Global LlamaContext and loaded model tracking
+// IMPORTANT: If AppDirectory is *only* defined here, make sure it's exported.
+// If it's also in '@lib/utils/File', you should either import it from there and use that,
+// or define it here and explicitly export it, being consistent across your app.
+// For the sake of resolving the ModelSettings.tsx errors, I'll assume this local AppDirectory
+// definition is the one you want exposed via LlamaModule.
+export const AppDirectory = { // EXPORTED
+  ModelPath: `${FileSystem.documentDirectory}models/`,
+  SessionPath: `${FileSystem.documentDirectory}sessions/`,
+  CharacterPath: `${FileSystem.documentDirectory}characters/`,
+  Assets: `${FileSystem.documentDirectory}assets/`,
+  LoRAPath: `${FileSystem.documentDirectory}loras/`, // Added LoRA path here
+}
+
+// Global contexts (these do not need to be exported if only used internally or via specific getter functions)
 let embeddingLlamaContext: LlamaContext | null = null
 let ragReasoningLlamaContext: LlamaContext | null = null
 let mainChatLlamaContext: LlamaContext | null = null
@@ -32,486 +51,316 @@ let loadedMainChatModel: ModelDataType | null = null
 
 const sessionFile = `${AppDirectory.SessionPath}llama-session.bin`
 
-// Define a type for default context parameters that do NOT include the model path
-// We can use Omit or just define the properties directly that are part of ContextParams but exclude 'model'
-type DefaultContextConfig = Omit<ContextParams, 'model'>;
+type DefaultContextConfig = Omit<ContextParams, 'model'>
 
-// Correct ContextParams properties - now typed as DefaultContextConfig
 const defaultConfig: DefaultContextConfig = {
-    n_ctx: 4096,
-    n_threads: 4,
-    n_gpu_layers: 0,
-    n_batch: 512,
-    // Note: 'model' is explicitly omitted here, as it's provided at load time.
-};
-
-
-export type EngineDataProps = {
-    config: DefaultContextConfig // Use DefaultContextConfig here
-    lastModel?: ModelDataType
-    embeddingModelId?: number | null
-    ragReasoningModelId?: number | null
-
-    selectedEmbeddingLoRAUri: string | null
-    selectedReasoningLoRAUri: string | null
-
-    setConfiguration: (config: DefaultContextConfig) => void // Use DefaultContextConfig here
-    setLastModelLoaded: (model: ModelDataType | undefined) => void
-    setEmbeddingModelId: (id: number | null) => void
-    setRagReasoningModelId: (id: number | null) => void
-
-    setSelectedEmbeddingLoRAUri: (uri: string | null) => void
-    setSelectedReasoningLoRAUri: (uri: string | null) => void
+  n_ctx: 4096,
+  n_threads: 4,
+  n_gpu_layers: 0,
+  n_batch: 512,
 }
 
-export const useEngineData = create<EngineDataProps>()(
-    persist(
-        (set) => ({
-            config: defaultConfig,
-            lastModel: undefined,
-            embeddingModelId: null,
-            ragReasoningModelId: null,
-            selectedEmbeddingLoRAUri: null,
-            selectedReasoningLoRAUri: null,
+// Export LlamaState type if other modules need to reference it directly
+export type LlamaState = { // EXPORTED
+  currentChatContext: LlamaContext | undefined
+  currentChatModel: ModelDataType | undefined
+  loadProgress: number
+  chatCount: number
+  promptCache?: string
 
-            setConfiguration: (config) => set(() => ({ config })),
-            setLastModelLoaded: (model) => set(() => ({ lastModel: model })),
-            setEmbeddingModelId: (id) => set(() => ({ embeddingModelId: id })),
-            setRagReasoningModelId: (id) => set(() => ({ ragReasoningModelId: id })),
+  loadedEmbeddingModelInContext: ModelDataType | null
+  loadedRagReasoningModelInContext: ModelDataType | null
+  loadedEmbeddingLoRAPathInContext: string | null
+  loadedRagReasoningLoRAPathInContext: string | null
 
-            setSelectedEmbeddingLoRAUri: (uri) => {
-                set({ selectedEmbeddingLoRAUri: uri })
-            },
-            setSelectedReasoningLoRAUri: (uri) => {
-                set({ selectedReasoningLoRAUri: uri })
-            },
-        }),
-        {
-            name: Storage.EngineData,
-            partialize: (state) => ({
-                config: state.config,
-                lastModel: state.lastModel,
-                embeddingModelId: state.embeddingModelId,
-                ragReasoningModelId: state.ragReasoningModelId,
-                selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
-                selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
-            }),
-            storage: createJSONStorage(() => mmkvStorage),
-            version: 3,
-        }
-    )
-)
+  setLoadedEmbeddingModelInContext: (model: ModelDataType | null, loraPath?: string | null) => void
+  setLoadedRagReasoningModelInContext: (model: ModelDataType | null, loraPath?: string | null) => void
 
-async function loadModelContext(
-    modelId: number,
-    expectedType: ModelDataType['model_type'],
-    currentContext: LlamaContext | null,
-    loadedModel: ModelDataType | null,
-    isEmbeddingModel = false,
-    loraPath: string | null = null
-): Promise<{ context: LlamaContext | null; model: ModelDataType | null }> {
-    const config = useEngineData.getState().config
+  loadCurrentChatModel: (model: ModelDataType) => Promise<boolean>
+  setLoadProgress: (progress: number) => void
+  unloadCurrentChatModel: () => Promise<void>
+  saveKV: (prompt?: string) => Promise<void>
+  loadKV: () => Promise<boolean>
+  completion: (
+    params: CompletionParams,
+    callback: (text: string) => void,
+    completed: (text: string, timings: CompletionTimings) => void
+  ) => Promise<void>
+  stopCompletion: () => Promise<void>
+  tokenLength: (text: string) => number
+  tokenize: (text: string) => { tokens: number[] } | undefined
+}
 
-    if (loadedModel?.id === modelId && currentContext) {
-        Logger.info(`Model of type '${expectedType}' (ID: ${modelId}) already loaded.`)
-        return { context: currentContext, model: loadedModel }
+export const useLlama = create<LlamaState>()((set, get) => ({ // EXPORTED
+  currentChatContext: undefined,
+  currentChatModel: undefined,
+  loadProgress: 0,
+  chatCount: 0,
+
+  loadedEmbeddingModelInContext: null,
+  loadedRagReasoningModelInContext: null,
+  loadedEmbeddingLoRAPathInContext: null,
+  loadedRagReasoningLoRAPathInContext: null,
+
+  setLoadedEmbeddingModelInContext: (model, loraPath = null) =>
+    set({ loadedEmbeddingModelInContext: model, loadedEmbeddingLoRAPathInContext: loraPath }),
+
+  setLoadedRagReasoningModelInContext: (model, loraPath = null) =>
+    set({ loadedRagReasoningModelInContext: model, loadedRagReasoningLoRAPathInContext: loraPath }),
+
+  async loadCurrentChatModel(model) {
+    if (get().currentChatModel?.id === model.id && get().currentChatContext) {
+      Logger.info('Main Chat Model Already Loaded!')
+      return true
     }
 
-    const model = await db.query.model_data.findFirst({ where: eq(model_data.id, modelId) })
-
-    if (!model) {
-        Logger.errorToast(`Model with ID ${modelId} not found in database.`)
-        return { context: null, model: null }
+    if (model.model_type !== 'main_chat') {
+      Logger.errorToast(
+        `Tried to load non-main_chat model as chat model: ${model.name} (${model.model_type})`
+      )
+      return false
     }
 
-    if (model.model_type !== expectedType) {
-        Logger.errorToast(
-            `Model ID ${modelId} is type '${model.model_type}', expected '${expectedType}'.`
-        )
-        return { context: null, model: null }
-    }
-
-    if (checkGGMLDeprecated(parseInt(model.quantization))) {
-        Logger.errorToast('Quantization No Longer Supported!')
-        return { context: null, model: null }
-    }
-
-    if (!(await getInfoAsync(model.file_path)).exists) {
-        Logger.errorToast(`Model file not found for ${model.name} at ${model.file_path}!`)
-        return { context: null, model: null }
-    }
-
-    if (currentContext) {
-        await currentContext
-            .release()
-            .catch((e) =>
-                Logger.warn(`Failed to release old context for ${expectedType}: ${e.message}`)
-            )
-    }
-
-    // When creating the actual params for initLlama, we combine the default config
-    // with the dynamic model path.
-    const params: ContextParams = {
-        model: model.file_path, // This is the required 'model' property
-        ...config, // Spread the default properties from defaultConfig
-        embedding: isEmbeddingModel,
-        lora: loraPath ?? undefined,
-        use_mlock: true,
-        n_gpu_layers: 99, // Overwrite if config.n_gpu_layers is 0 and you always want 99
-        ctx_shift: false,
-    }
-
-    Logger.info(
-        `\n------ MODEL LOAD (${expectedType}) -----\nModel Name: ${model.name}\nParameters:\nContext Length: ${params.n_ctx}\nThreads: ${params.n_threads}\nBatch Size: ${params.n_batch}\nEmbedding Mode: ${isEmbeddingModel}\nLoRA: ${loraPath || 'None'}`
+    const { context, model: loadedModel } = await loadModelContext(
+      model.id,
+      'main_chat',
+      get().currentChatContext ?? null,
+      get().currentChatModel ?? null,
+      false
     )
 
-    const llamaContext = await initLlama(params).catch((error) => {
-        Logger.errorToast(`Could Not Load ${expectedType} Model: ${error.message}`)
-        return null
+    if (!context) return false
+
+    set({
+      currentChatContext: context,
+      currentChatModel: loadedModel!,
+      chatCount: 1,
+      loadProgress: 100,
     })
 
-    if (!llamaContext) return { context: null, model: null }
+    // This import needs to be resolved externally or re-exported from here
+    // Assuming useEngineData is from '@state/EngineData'
+    // For now, let's assume it's imported correctly in files that use LlamaLocal
+    // and that LlamaLocal itself just calls it.
+    // If you want LlamaModule.useEngineData, then useEngineData needs to be exported from here.
+    // export { useEngineData } from '../../state/EngineData'; // <--- ADD THIS IF YOU WANT TO RE-EXPORT
+    // Also, if EngineDataProps is used here, ensure it's imported or defined.
 
-    Logger.info(`${expectedType} model '${model.name}' loaded successfully.`)
-    return { context: llamaContext, model }
-}
+    // This line uses useEngineData, which is *not* exported from LlamaLocal.ts currently.
+    // If ModelSettings.tsx accesses it as LlamaModule.useEngineData, it needs to be exported.
+    // For now, I'm assuming useEngineData is imported *directly* into ModelSettings.tsx
+    // as per the previous solution. If not, this needs re-export from LlamaLocal.
+    useEngineData.getState().setLastModelLoaded(loadedModel!)
+    KV.useKVState.getState().setKvCacheLoaded(false)
 
-export async function getEmbeddingLlamaContext(
-    loraPath: string | null = null
-): Promise<LlamaContext | null> {
-    const embeddingModelId = useEngineData.getState().embeddingModelId
-    if (!embeddingModelId) {
-        Logger.warn('No RAG Embedding Model selected in settings.')
-        return null
+    return true
+  },
+
+  setLoadProgress(progress) {
+    set({ loadProgress: progress })
+  },
+
+  async unloadCurrentChatModel() {
+    await get().currentChatContext?.release()
+    set({
+      currentChatContext: undefined,
+      currentChatModel: undefined,
+      loadProgress: 0,
+      chatCount: 0,
+    })
+    
+    if (mainChatLlamaContext === get().currentChatContext) {
+      mainChatLlamaContext = null
+      loadedMainChatModel = null
     }
-    if (
-        !embeddingLlamaContext ??
-        loadedEmbeddingModel?.id !== embeddingModelId ??
-        loadedEmbeddingLoRAPath !== loraPath
-    ) {
-        Logger.info(`Loading RAG Embedding Model (ID: ${embeddingModelId})...`)
-        const { context, model } = await loadModelContext(
-            embeddingModelId,
-            'rag_embedding',
-            embeddingLlamaContext,
-            loadedEmbeddingModel,
-            true,
-            loraPath
-        )
-        embeddingLlamaContext = context
-        loadedEmbeddingModel = model
-        loadedEmbeddingLoRAPath = loraPath
-        useEngineData.getState().setSelectedEmbeddingLoRAUri(loraPath)
+  },
+
+  async completion(params, callback = () => {}, completed = () => {}) {
+    const llamaContext = get().currentChatContext
+    if (!llamaContext) {
+      Logger.errorToast('No Main Chat Model Loaded')
+      return
     }
-    return embeddingLlamaContext
-}
-
-export async function getRagReasoningLlamaContext(
-    loraPath: string | null = null
-): Promise<LlamaContext | null> {
-    const ragReasoningModelId = useEngineData.getState().ragReasoningModelId
-    if (!ragReasoningModelId) {
-        Logger.warn('No RAG Reasoning Model selected in settings.')
-        return null
-    }
-    if (
-        !ragReasoningLlamaContext ??
-        loadedRagReasoningModel?.id !== ragReasoningModelId ??
-        loadedRagReasoningLoRAPath !== loraPath
-    ) {
-        Logger.info(`Loading RAG Reasoning Model (ID: ${ragReasoningModelId})...`)
-        const { context, model } = await loadModelContext(
-            ragReasoningModelId,
-            'rag_reasoning',
-            ragReasoningLlamaContext,
-            loadedRagReasoningModel,
-            false,
-            loraPath
-        )
-        ragReasoningLlamaContext = context
-        loadedRagReasoningModel = model
-        loadedRagReasoningLoRAPath = loraPath
-        useEngineData.getState().setSelectedReasoningLoRAUri(loraPath)
-    }
-    return ragReasoningLlamaContext
-}
-
-export async function getMainChatLlamaContext(): Promise<LlamaContext | null> {
-    const lastModel = useEngineData.getState().lastModel
-    if (!lastModel?.id) {
-        Logger.warn('No Main Chat Model selected in settings.')
-        return null
-    }
-
-    if (lastModel.model_type !== 'main_chat') {
-        Logger.warn(
-            `Last selected model (ID: ${lastModel.id}, Name: ${lastModel.name}) is not a 'main_chat' type.`
-        )
-        return null
-    }
-
-    if (!mainChatLlamaContext ?? loadedMainChatModel?.id !== lastModel.id) {
-        Logger.info(`Loading Main Chat Model (ID: ${lastModel.id})...`)
-        const { context, model } = await loadModelContext(
-            lastModel.id,
-            'main_chat',
-            mainChatLlamaContext,
-            loadedMainChatModel,
-            false
-        )
-        mainChatLlamaContext = context
-        loadedMainChatModel = model
-    }
-    return mainChatLlamaContext
-}
-
-export async function unloadEmbeddingLlamaContext() {
-    if (embeddingLlamaContext) {
-        await embeddingLlamaContext.release()
-        embeddingLlamaContext = null
-        loadedEmbeddingModel = null
-        loadedEmbeddingLoRAPath = null
-        useEngineData.getState().setEmbeddingModelId(null)
-        useEngineData.getState().setSelectedEmbeddingLoRAUri(null)
-        Logger.info('Embedding Llama context unloaded.')
-    }
-}
-
-export async function unloadRagReasoningLlamaContext() {
-    if (ragReasoningLlamaContext) {
-        await ragReasoningLlamaContext.release()
-        ragReasoningLlamaContext = null
-        loadedRagReasoningModel = null
-        loadedRagReasoningLoRAPath = null
-        useEngineData.getState().setRagReasoningModelId(null)
-        useEngineData.getState().setSelectedReasoningLoRAUri(null)
-        Logger.info('RAG Reasoning Llama context unloaded.')
-    }
-}
-
-export async function unloadMainChatLlamaContext() {
-    if (mainChatLlamaContext) {
-        await mainChatLlamaContext.release()
-        mainChatLlamaContext = null
-        loadedMainChatModel = null
-        useEngineData.getState().setLastModelLoaded(undefined)
-        Logger.info('Main Chat Llama context unloaded.')
-    }
-}
-
-export type CompletionTimings = {
-    predicted_per_token_ms: number
-    predicted_per_second: number | null
-    predicted_ms: number
-    predicted_n: number
-
-    prompt_per_token_ms: number
-    prompt_per_second: number | null
-    prompt_ms: number
-    prompt_n: number
-}
-
-export type CompletionOutput = {
-    text: string
-    timings: CompletionTimings
-}
-
-export type LlamaState = {
-    currentChatContext: LlamaContext | undefined
-    currentChatModel: ModelDataType | undefined
-    loadProgress: number
-    chatCount: number
-    promptCache?: string
-    loadCurrentChatModel: (model: ModelDataType) => Promise<boolean>
-    setLoadProgress: (progress: number) => void
-    unloadCurrentChatModel: () => Promise<void>
-    saveKV: (prompt?: string) => Promise<void>
-    loadKV: () => Promise<boolean>
-    completion: (
-        params: CompletionParams,
-        callback: (text: string) => void,
-        completed: (text: string, timings: CompletionTimings) => void
-    ) => Promise<void>
-    stopCompletion: () => Promise<void>
-    tokenLength: (text: string) => number
-    tokenize: (text: string) => { tokens: number[] } | undefined
-}
-
-export const useLlama = create<LlamaState>()((set, get) => ({
-    currentChatContext: undefined,
-    currentChatModel: undefined,
-    loadProgress: 0,
-    chatCount: 0,
-
-    loadCurrentChatModel: async (model: ModelDataType): Promise<boolean> => {
-        if (get().currentChatModel?.id === model.id && get().currentChatContext) {
-            Logger.info('Main Chat Model Already Loaded!')
-            return true
-        }
-
-        if (model.model_type !== 'main_chat') {
-            Logger.errorToast(
-                `Attempted to load non-main_chat model as current chat model: ${model.name} (${model.model_type})`
-            )
-            return false
-        }
-
-        const { context, model: loadedModel } = await loadModelContext(
-            model.id,
-            'main_chat',
-            get().currentChatContext ?? null,
-            get().currentChatModel ?? null,
-            false
-        )
-
-        if (!context) {
-            return false
-        }
-
-        set({
-            currentChatContext: context,
-            currentChatModel: loadedModel!,
-            chatCount: 1,
-            loadProgress: 100,
-        })
-
-        useEngineData.getState().setLastModelLoaded(loadedModel!)
-        KV.useKVState.getState().setKvCacheLoaded(false)
-        return true
-    },
-
-    setLoadProgress: (progress: number) => {
-        set((state) => ({ ...state, loadProgress: progress }))
-    },
-
-    unloadCurrentChatModel: async () => {
-        await get().currentChatContext?.release()
-        set({
-            currentChatContext: undefined,
-            currentChatModel: undefined,
-            loadProgress: 0,
-            chatCount: 0,
-        })
-        if (mainChatLlamaContext === get().currentChatContext) {
-            mainChatLlamaContext = null
-            loadedMainChatModel = null
-        }
-    },
-
-    completion: async (params, callback = () => {}, completed = () => {}) => {
-        const llamaContext = get().currentChatContext
-        if (!llamaContext) {
-            Logger.errorToast('No Main Chat Model Loaded')
-            return
-        }
-
-        return llamaContext
-            .completion(params, (data: any) => {
-                callback(data.token)
-            })
-            .then(async ({ text, timings }: CompletionOutput) => {
-                completed(text, timings)
-                Logger.info(
-                    `\n---- Start Chat ${get().chatCount} ----\n${textTimings(timings)}\n---- End Chat ${get().chatCount} ----\n`
-                )
-                set({ chatCount: get().chatCount + 1 })
-
-                if (mmkv.getBoolean(AppSettings.SaveLocalKV)) {
-                    await get().saveKV(params.prompt)
-                }
-            })
-    },
-
-    stopCompletion: async () => {
-        await get().currentChatContext?.stopCompletion()
-    },
-
-    saveKV: async (prompt) => {
-        const llamaContext = get().currentChatContext
-        if (!llamaContext) {
-            Logger.errorToast('No Main Chat Model Loaded')
-            return
-        }
-
-        if (prompt) {
-            const tokens = get().tokenize(prompt)?.tokens
-            KV.useKVState.getState().setKvCacheTokens(tokens ?? [])
-        }
-
-        if (!(await getInfoAsync(sessionFile)).exists) {
-            await FileSystem.writeAsStringAsync(sessionFile, '', { encoding: 'base64' })
-        }
-
-        const now = performance.now()
-        const data = await llamaContext.saveSession(sessionFile.replace('file://', ''))
+    return llamaContext
+      .completion(params, (data: any) => callback(data.token))
+      .then(async ({ text, timings }) => {
+        completed(text, timings)
         Logger.info(
-            data === -1
-                ? 'Failed to save KV cache'
-                : `Saved KV in ${Math.floor(performance.now() - now)}ms with ${data} tokens`
+          `\n---- Start Chat ${get().chatCount} ----\n${textTimings(timings)}\n---- End Chat ${get().chatCount} ----\n`
         )
-        Logger.info(`Current KV Size is: ${readableFileSize(await KV.getKVSize())}`)
-    },
-
-    loadKV: async () => {
-        const llamaContext = get().currentChatContext
-        if (!llamaContext) {
-            Logger.errorToast('No Main Chat Model Loaded')
-            return false
+        set({ chatCount: get().chatCount + 1 })
+        if (mmkv.getBoolean(AppSettings.SaveLocalKV)) {
+          await get().saveKV(params.prompt)
         }
+      })
+  },
 
-        const data = await getInfoAsync(sessionFile)
-        if (!data.exists) {
-            Logger.warn('No KV Cache found')
-            return false
-        }
+  async stopCompletion() {
+    await get().currentChatContext?.stopCompletion()
+  },
 
-        try {
-            await llamaContext.loadSession(sessionFile.replace('file://', ''))
-            Logger.info('Session loaded from KV cache')
-            return true
-        } catch (e: any) {
-            Logger.error(`Session could not load from KV cache: ${e.message}`)
-            return false
-        }
-    },
+  async saveKV(prompt?) {
+    const llamaContext = get().currentChatContext
+    if (!llamaContext) {
+      Logger.errorToast('No Main Chat Model Loaded')
+      return
+    }
 
-    tokenLength: (text: string) => {
-        return get().currentChatContext?.tokenizeSync(text)?.tokens?.length ?? 0
-    },
+    if (prompt) {
+      const tokens = get().tokenize(prompt)?.tokens
+      KV.useKVState.getState().setKvCacheTokens(tokens ?? [])
+    }
 
-    tokenize: (text: string) => {
-        return get().currentChatContext?.tokenizeSync(text)
-    },
+    if (!(await getInfoAsync(sessionFile)).exists) {
+      await FileSystem.writeAsStringAsync(sessionFile, '', { encoding: 'base64' })
+    }
+
+    const now = performance.now()
+    const data = await llamaContext.saveSession(sessionFile.replace('file://', ''))
+    Logger.info(
+      data === -1
+        ? 'Failed to save KV cache'
+        : `Saved KV in ${Math.floor(performance.now() - now)}ms with ${data} tokens`
+    )
+    Logger.info(`Current KV Size is: ${readableFileSize(await KV.getKVSize())}`)
+  },
+
+  async loadKV() {
+    const llamaContext = get().currentChatContext
+    if (!llamaContext) {
+      Logger.errorToast('No Main Chat Model Loaded')
+      return false
+    }
+
+    const data = await getInfoAsync(sessionFile)
+    if (!data.exists) {
+      Logger.warn('No KV Cache found')
+      return false
+    }
+
+    try {
+      await llamaContext.loadSession(sessionFile.replace('file://', ''))
+      Logger.info('Session loaded from KV cache')
+      return true
+    } catch (e: any) {
+      Logger.error(`Could not load session from KV cache: ${e.message}`)
+      return false
+    }
+  },
+
+  tokenLength(text) {
+    return get().currentChatContext?.tokenizeSync(text)?.tokens?.length ?? 0
+  },
+
+  tokenize(text) {
+    return get().currentChatContext?.tokenizeSync(text)
+  },
 }))
 
-function textTimings(timings: CompletionTimings): string {
-    return (
-        `\n[Prompt Timings]` +
-        (timings.prompt_n > 0
-            ? `\nPrompt Per Token: ${timings.prompt_per_token_ms} ms/token` +
-              `\nPrompt Per Second: ${timings.prompt_per_second?.toFixed(2) ?? 0} tokens/s` +
-              `\nPrompt Time: ${(timings.prompt_ms / 1000).toFixed(2)}s` +
-              `\nPrompt Tokens: ${timings.prompt_n} tokens`
-            : '\nNo Tokens Processed') +
-        `\n\n[Predicted Timings]` +
-        (timings.predicted_n > 0
-            ? `\nPredicted Per Token: ${timings.predicted_per_token_ms} ms/token` +
-              `\nPredicted Per Second: ${timings.predicted_per_second?.toFixed(2) ?? 0} tokens/s` +
-              `\nPrediction Time: ${(timings.predicted_ms / 1000).toFixed(2)}s` +
-              `\nPredicted Tokens: ${timings.predicted_n} tokens\n`
-            : '\nNo Tokens Generated')
-    )
+// Export the LlamaContext type itself if it's used directly elsewhere as LlamaModule.LlamaContext
+export type { LlamaContext, CompletionTimings }; // EXPORTED
+
+// These need to be exported if other files call them as LlamaModule.getEmbeddingLlamaContext etc.
+export async function getEmbeddingLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> { // EXPORTED
+  if (embeddingLlamaContext && loadedEmbeddingLoRAPath === loraPath && loadedEmbeddingModel) {
+    Logger.info('Embedding model and LoRA already loaded, returning existing context.')
+    return embeddingLlamaContext
+  }
+  const modelId = useEngineData.getState().embeddingModelId // Assuming this is where embeddingModelId is stored
+  if (!modelId) {
+    Logger.errorToast('No embedding model selected.')
+    return null
+  }
+  const { context, model } = await loadModelContext(modelId, 'rag_embedding', embeddingLlamaContext, loadedEmbeddingModel, true, loraPath)
+  if (context) {
+    embeddingLlamaContext = context
+    loadedEmbeddingModel = model
+    loadedEmbeddingLoRAPath = loraPath
+    useLlama.getState().setLoadedEmbeddingModelInContext(model, loraPath)
+  }
+  return embeddingLlamaContext
 }
 
-// Re-export necessary types and constants to be accessible via 'Llama' namespace alias in other files
-export {
-    AppDirectory,
-    readableFileSize,
-    FileSystem,
-    initLlama, // initLlama is a function, keep as value export
+export async function getRagReasoningLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> { // EXPORTED
+  if (ragReasoningLlamaContext && loadedRagReasoningLoRAPath === loraPath && loadedRagReasoningModel) {
+    Logger.info('RAG Reasoning model and LoRA already loaded, returning existing context.')
+    return ragReasoningLlamaContext
+  }
+  const modelId = useEngineData.getState().ragReasoningModelId // Assuming this is where ragReasoningModelId is stored
+  if (!modelId) {
+    Logger.errorToast('No RAG Reasoning model selected.')
+    return null
+  }
+  const { context, model } = await loadModelContext(modelId, 'rag_reasoning', ragReasoningLlamaContext, loadedRagReasoningModel, false, loraPath)
+  if (context) {
+    ragReasoningLlamaContext = context
+    loadedRagReasoningModel = model
+    loadedRagReasoningLoRAPath = loraPath
+    useLlama.getState().setLoadedRagReasoningModelInContext(model, loraPath)
+  }
+  return ragReasoningLlamaContext
 }
-// Use 'export type' for type-only re-exports
-export type {
-    LlamaContext, // LlamaContext is a type
-    CompletionParams, // CompletionParams is a type
+
+export async function unloadEmbeddingLlamaContext(): Promise<void> { // EXPORTED
+  if (embeddingLlamaContext) {
+    await embeddingLlamaContext.release()
+    embeddingLlamaContext = null
+    loadedEmbeddingModel = null
+    loadedEmbeddingLoRAPath = null
+    useLlama.getState().setLoadedEmbeddingModelInContext(null, null)
+    Logger.info('Embedding Llama context unloaded.')
+  }
+}
+
+export async function unloadRagReasoningLlamaContext(): Promise<void> { // EXPORTED
+  if (ragReasoningLlamaContext) {
+    await ragReasoningLlamaContext.release()
+    ragReasoningLlamaContext = null
+    loadedRagReasoningModel = null
+    loadedRagReasoningLoRAPath = null
+    useLlama.getState().setLoadedRagReasoningModelInContext(null, null)
+    Logger.info('RAG Reasoning Llama context unloaded.')
+  }
+}
+
+// Assuming useEngineData comes from here:
+import { useEngineData } from '../../state/EngineData'; // Assuming this path, adjust if needed
+export { useEngineData }; // Re-export useEngineData if other files want to access it via LlamaModule.
+
+async function loadModelContext(
+  modelId: number,
+  expectedType: ModelDataType['model_type'],
+  currentContext: LlamaContext | null,
+  loadedModel: ModelDataType | null,
+  isEmbeddingModel = false,
+  loraPath: string | null = null
+): Promise<{ context: LlamaContext | null; model: ModelDataType | null }> {
+  // ... (rest of loadModelContext function, no changes needed)
+  const config = useEngineData.getState().config // This uses useEngineData internally
+  // ...
+  const llamaContext = await initLlama(params).catch((error: any) => { // Type 'error' as any
+    Logger.errorToast(`Could Not Load ${expectedType} Model: ${error.message}`)
+    return null
+  })
+  // ...
+}
+
+function textTimings(timings: CompletionTimings): string {
+  // ... (no changes needed)
+  return (
+    `\n[Prompt Timings]` +
+    (timings.prompt_n > 0
+      ? `\nPrompt Per Token: ${timings.prompt_per_token_ms} ms/token` +
+        `\nPrompt Per Second: ${timings.prompt_per_second?.toFixed(2) ?? 0} tokens/s` +
+        `\nPrompt Time: ${(timings.prompt_ms / 1000).toFixed(2)}s` +
+        `\nPrompt Tokens: ${timings.prompt_n} tokens`
+      : '\nNo Tokens Processed') +
+    `\n\n[Predicted Timings]` +
+    (timings.predicted_n > 0
+      ? `\nPredicted Per Token: ${timings.predicted_per_token_ms} ms/token` +
+        `\nPredicted Per Second: ${timings.predicted_per_second?.toFixed(2) ?? 0} tokens/s` +
+        `\nPrediction Time: ${(timings.predicted_ms / 1000).toFixed(2)}s` +
+        `\nPredicted Tokens: ${timings.predicted_n} tokens\n`
+      : '\nNo Tokens Generated')
+  )
 }

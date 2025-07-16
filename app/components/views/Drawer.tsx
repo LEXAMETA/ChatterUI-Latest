@@ -119,6 +119,8 @@ namespace Drawer {
                     </FadeBackrop>
                 </View>
             )
+
+        return null
     }
 
     export const Button: React.FC<DrawerButtonProps> = ({
@@ -148,7 +150,7 @@ namespace Drawer {
             values: state.values,
         }))
 
-        const drawerShown = config.map((item) => values?.[item.drawerID]).some((item) => item)
+        const drawerShown = config.map((item) => values?.[item.drawerID]).some(Boolean)
 
         const gestures: FlingGesture[] = []
         config.forEach((item) => {
@@ -159,7 +161,7 @@ namespace Drawer {
                         setShowDrawer(item.drawerID, false)
                     })
                     .runOnJS(true)
-                    .enabled(values?.[item.drawerID])
+                    .enabled(Boolean(values?.[item.drawerID])) // fixed here
             )
 
             gestures.push(

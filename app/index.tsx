@@ -5,7 +5,7 @@ import { AppSettings } from '@lib/constants/GlobalValues'
 import { Llama } from '@lib/engine/Local/LlamaLocal'
 import useLocalAuth from '@lib/hooks/LocalAuth'
 import { Logger } from '@lib/state/Logger'
-import { useMMKVBoolean } from '@lib/storage/MMKV'
+import { useMMKVBoolean } from '@storage/MMKV';
 import { Theme } from '@lib/theme/ThemeManager'
 import { loadChatOnInit, startupApp } from '@lib/utils/Startup'
 import CharacterMenu from '@screens/CharacterMenu'

@@ -1,5 +1,3 @@
-// app/components/views/PopupMenu.tsx
-
 import { AntDesign } from '@expo/vector-icons'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useFocusEffect } from 'expo-router'
@@ -16,7 +14,11 @@ import {
 
 const { Popover } = renderers
 
-export type MenuRef = React.MutableRefObject<Menu | null>
+// Updated MenuRef to explicitly include close() and isOpen() methods
+export type MenuRef = React.MutableRefObject<{
+    close: () => void
+    isOpen: () => boolean
+} | null>
 
 type PopupOptionProps = {
     label: string
@@ -85,9 +87,10 @@ const PopupMenu: React.FC<PopupMenuProps> = ({
     const [showMenu, setShowMenu] = useState<boolean>(false)
     const menuRef: MenuRef = useRef(null)
 
+    // Back handler to close menu on hardware back press
     const backAction = () => {
-        if (!menuRef.current || !menuRef.current?.isOpen()) return false
-        menuRef.current?.close()
+        if (!menuRef.current || !menuRef.current.isOpen()) return false
+        menuRef.current.close()
         return true
     }
 
@@ -122,10 +125,6 @@ const PopupMenu: React.FC<PopupMenuProps> = ({
             </MenuTrigger>
             <MenuOptions customStyles={menuStyle}>
                 {options.map((item) => (
-                    // Pass a default icon if item.icon is undefined, or ensure it's always provided.
-                    // Given we made PopupOptionProps.icon optional, we need to ensure icon is passed to PopupOption or handle default there.
-                    // For now, let's assume `item.icon` will either be present or the PopupOption component will handle the absence.
-                    // We already added default icons in ModelSettings.tsx.
                     <PopupOption {...item} key={item.label} menuRef={menuRef} icon={item.icon} />
                 ))}
             </MenuOptions>
