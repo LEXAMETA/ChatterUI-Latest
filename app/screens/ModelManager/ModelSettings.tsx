@@ -2,10 +2,12 @@
 
 import ThemedButton from '@components/buttons/ThemedButton'
 import PopupMenu from '@components/views/PopupMenu'
-import { Llama } from '@lib/engine/Local/LlamaLocal'
-import { Model } from '@lib/engine/Local/Model' // Make sure Model namespace is imported
+import * as LlamaModule from '@lib/engine/Local/LlamaLocal' // Import as namespace
+// Import GGMLNameMap and GGMLType from the GGML utility file
+import { GGMLNameMap, GGMLType } from '@lib/engine/Local/GGML' // Corrected import
 import { Theme } from '@lib/theme/ThemeManager'
 import { ModelDataType } from 'db/schema'
+import * as DocumentPicker from 'expo-document-picker'
 import { readDirectoryAsync, getInfoAsync } from 'expo-file-system'
 import { useEffect, useState } from 'react'
 import {
@@ -18,24 +20,27 @@ import {
     Alert,
     Platform,
 } from 'react-native'
-import { Switch } from 'react-native-gesture-handler' // Assuming you use this for switches
+import { Switch } from 'react-native-gesture-handler'
 
-import { AppSettings } from '../../constants/GlobalValues'
-import { Logger } from '../../state/Logger'
-import { useMMKVBoolean } from '../../storage/MMKV' // Keep relevant MMKV hooks
+// IMPORTANT: Verify these paths in your tsconfig.json/babel.config.js
+import { AppSettings } from '@constants/GlobalValues'
+import { Logger } from '@state/Logger'
+import { useMMKVBoolean } from '@storage/MMKV'
+
+import AntDesign from '@expo/vector-icons/AntDesign'
 
 type ModelSettingsProps = {
     exit: () => void
     modelImporting: boolean
     modelLoading: boolean
-    models: ModelDataType[] // All models from the database
+    setModelLoading: (loading: boolean) => void
+    models: ModelDataType[]
     embeddingModelId: number | null | undefined
     ragReasoningModelId: number | null | undefined
     setEmbeddingModelId: (id: number | null) => void
     setRagReasoningModelId: (id: number | null) => void
 }
 
-// Type for local file entries (used for LoRAs)
 type FileEntry = {
     name: string
     uri: string
@@ -46,7 +51,8 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     exit,
     modelImporting,
     modelLoading,
-    models, // All models from the database
+    setModelLoading,
+    models,
     embeddingModelId,
     ragReasoningModelId,
     setEmbeddingModelId,
@@ -63,31 +69,28 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         null
     )
 
-    // Get LoRA URIs from Zustand (LlamaLocal.ts)
     const {
         selectedEmbeddingLoRAUri,
         selectedReasoningLoRAUri,
         setSelectedEmbeddingLoRAUri,
         setSelectedReasoningLoRAUri,
-    } = Llama.useEngineData((state) => ({
+    } = LlamaModule.useEngineData((state: LlamaModule.EngineDataProps) => ({
         selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
         selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
         setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
         setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
     }))
 
-    // MMKV states for general settings
     const [saveLocalKV, setSaveLocalKV] = useMMKVBoolean(AppSettings.SaveLocalKV)
     const [autoLoadLocal, setAutoLoadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal)
     const [showModelInChat, setShowModelInChat] = useMMKVBoolean(AppSettings.ShowModelInChat)
 
-    // Effect to load available LoRAs and set initial selections
     useEffect(() => {
         const loadLoRAs = async () => {
-            const loraPath = `${Llama.AppDirectory.LoRAPath}`
+            const loraPath = `${LlamaModule.AppDirectory.LoRAPath}` // Now correctly includes LoRAPath
             const info = await getInfoAsync(loraPath)
             if (!info.exists) {
-                await Llama.FileSystem.makeDirectoryAsync(loraPath)
+                await LlamaModule.FileSystem.makeDirectoryAsync(loraPath)
             }
 
             const files = await readDirectoryAsync(loraPath)
@@ -101,7 +104,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
             }
             setAvailableLoRAs(loraFiles)
 
-            // Set local selected LoRA states based on persisted URIs
             if (selectedEmbeddingLoRAUri) {
                 const found = loraFiles.find((l) => l.uri === selectedEmbeddingLoRAUri)
                 setSelectedEmbeddingLoRALocal(found ?? null)
@@ -116,32 +118,34 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
             }
         }
         loadLoRAs()
-    }, [selectedEmbeddingLoRAUri, selectedReasoningLoRAUri]) // Re-run if persisted URIs change
+    }, [selectedEmbeddingLoRAUri, selectedReasoningLoRAUri])
 
     const handlePickAndCopyFile = async (type: 'lora') => {
-        if (modelImporting ?? modelLoading) return
+        if (modelImporting || modelLoading) return
 
-        const result = await Llama.getDocumentAsync({
+        const result = await DocumentPicker.getDocumentAsync({
             copyToCacheDirectory: false,
         })
 
-        if (result.canceled ?? !result.assets ?? result.assets.length === 0) return
+        // Improved type narrowing for DocumentPickerResult
+        if (result.canceled || !result.assets || result.assets.length === 0) {
+            return
+        }
 
-        const file = result.assets[0]
-        const targetPath = `${Llama.AppDirectory.LoRAPath}${file.name}` // Always copy to LoRA path
+        const file = result.assets[0]; // 'file' is now definitely DocumentPickerAsset
+
+        const targetPath = `${LlamaModule.AppDirectory.LoRAPath}${file.name}` // 'file.name' is safe
 
         Logger.infoToast(`Copying ${type} file...`)
         try {
-            await Llama.FileSystem.copyAsync({
-                from: file.uri,
+            await LlamaModule.FileSystem.copyAsync({
+                from: file.uri, // 'file.uri' is safe
                 to: targetPath,
             })
-            // After successful copy, refresh the list of available LoRAs
-            // and update the selected LoRA state
             const fileInfo = await getInfoAsync(targetPath)
             if (fileInfo.exists) {
                 const newLoRAEntry: FileEntry = {
-                    name: file.name,
+                    name: file.name, // 'file.name' is safe
                     uri: targetPath,
                     size: fileInfo.size,
                 }
@@ -165,26 +169,25 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     }
 
     const handleLoadContext = async (contextType: 'embedding' | 'reasoning') => {
-        if (modelLoading ?? modelImporting) return
+        if (modelLoading || modelImporting) return
 
         let modelIdToLoad: number | null | undefined
         let loraUriToLoad: string | null
         let setModelIdFunc: (id: number | null) => void
-        let getLlamaContextFunc: (loraPath: string | null) => Promise<Llama.LlamaContext | null>
+        let getLlamaContextFunc: (loraPath: string | null) => Promise<LlamaModule.LlamaContext | null>
         let modelTypeName: ModelDataType['model_type']
 
         if (contextType === 'embedding') {
             modelIdToLoad = embeddingModelId
             loraUriToLoad = selectedEmbeddingLoRALocal?.uri ?? null
             setModelIdFunc = setEmbeddingModelId
-            getLlamaContextFunc = Llama.getEmbeddingLlamaContext
+            getLlamaContextFunc = LlamaModule.getEmbeddingLlamaContext
             modelTypeName = 'rag_embedding'
         } else {
-            // 'reasoning'
             modelIdToLoad = ragReasoningModelId
             loraUriToLoad = selectedReasoningLoRALocal?.uri ?? null
             setModelIdFunc = setRagReasoningModelId
-            getLlamaContextFunc = Llama.getRagReasoningLlamaContext
+            getLlamaContextFunc = LlamaModule.getRagReasoningLlamaContext
             modelTypeName = 'rag_reasoning'
         }
 
@@ -196,18 +199,16 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
             return
         }
 
-        // Find the full ModelDataType object using the ID
         const baseModel = models.find((m) => m.id === modelIdToLoad)
         if (!baseModel) {
             Alert.alert(
                 'Model Not Found',
                 `Selected base model (ID: ${modelIdToLoad}) not found in database. Please re-select.`
             )
-            setModelIdFunc(null) // Clear invalid ID
+            setModelIdFunc(null)
             return
         }
 
-        // Check if the selected model matches the expected type
         if (baseModel.model_type !== modelTypeName) {
             Alert.alert(
                 'Incorrect Model Type',
@@ -216,10 +217,8 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
             return
         }
 
-        setModelLoading(true) // Signal global loading
+        setModelLoading(true)
         try {
-            // LlamaLocal.ts `get...LlamaContext` functions now handle model lookup by ID internally
-            // and manage their own global contexts. We just need to trigger the load.
             const context = await getLlamaContextFunc(loraUriToLoad)
             if (context) {
                 Logger.infoToast(
@@ -232,55 +231,58 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
             Logger.errorToast(`Error loading ${modelTypeName} model: ${error.message}`)
             console.error(`Error loading ${modelTypeName} model:`, error)
         } finally {
-            setModelLoading(false) // Signal global loading finished
+            setModelLoading(false)
         }
     }
 
     const handleUnloadContext = async (contextType: 'embedding' | 'reasoning') => {
         if (modelLoading || modelImporting) return
 
-        setModelLoading(true) // Indicate unloading
+        setModelLoading(true)
         try {
             if (contextType === 'embedding') {
-                await Llama.unloadEmbeddingLlamaContext()
+                await LlamaModule.unloadEmbeddingLlamaContext()
             } else {
-                await Llama.unloadRagReasoningLlamaContext()
+                await LlamaModule.unloadRagReasoningLlamaContext()
             }
             Logger.infoToast(`${contextType} model unloaded.`)
         } catch (error: any) {
             Logger.errorToast(`Failed to unload ${contextType} model: ${error.message}`)
         } finally {
-            setModelLoading(false) // Signal unloading finished
+            setModelLoading(false)
         }
     }
 
     const renderModelPicker = (
         currentModelId: number | null | undefined,
-        contextType: ModelDataType['model_type'], // e.g., 'rag_embedding', 'rag_reasoning'
+        contextType: ModelDataType['model_type'],
         title: string,
         onSelectId: (id: number | null) => void,
-        loadedContextModel: ModelDataType | undefined // From LlamaLocal.ts (if context is currently active)
+        loadedContextModel: ModelDataType | null | undefined // Ensure nullable
     ) => {
         const filteredModels = models.filter((m) => m.model_type === contextType)
         const selectedModel = filteredModels.find((m) => m.id === currentModelId)
         const isModelLoaded = loadedContextModel?.id === currentModelId
 
-        const disabled = modelLoading ?? modelImporting
+        const disabled = modelLoading || modelImporting
+
+        type AntDesignIconNames = keyof typeof AntDesign.glyphMap
 
         return (
             <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>{title} Base Model</Text>
                 <PopupMenu
-                    placement="top" // Or "bottom", depending on preferred UX
-                    icon="caretdown" // Placeholder, you might want a more fitting icon
+                    placement="top"
+                    icon="caretdown" as AntDesignIconNames // Explicitly cast
                     disabled={disabled}
                     options={
                         filteredModels.length > 0
                             ? filteredModels.map((model) => ({
                                   label: model.name,
                                   onPress: () => onSelectId(model.id),
+                                  icon: 'database' as AntDesignIconNames,
                               }))
-                            : [{ label: 'No models of this type available', onPress: () => {} }]
+                            : [{ label: 'No models of this type available', onPress: () => {}, icon: 'exclamationcircleo' as AntDesignIconNames }]
                     }>
                     <View style={styles.selectionDisplay}>
                         <Text style={styles.selectionText}>
@@ -301,8 +303,9 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 {selectedModel && (
                     <Text style={styles.selectedModelInfo}>
                         Type: {selectedModel.model_type} | Quant:{' '}
-                        {Model.GGMLNameMap[parseInt(selectedModel.quantization) as Llama.GGMLType]}{' '}
-                        | Size: {Llama.readableFileSize(selectedModel.file_size)}
+                        {/* Correctly type index for GGMLNameMap */}
+                        {GGMLNameMap[parseInt(selectedModel.quantization) as GGMLType]}{' '}
+                        | Size: {LlamaModule.readableFileSize(selectedModel.file_size)}
                     </Text>
                 )}
             </View>
@@ -314,30 +317,33 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         title: string,
         onSelect: (file: FileEntry | null) => void
     ) => {
-        const disabled = modelLoading ?? modelImporting
+        const disabled = modelLoading || modelImporting;
+        type AntDesignIconNames = keyof typeof AntDesign.glyphMap;
+
         return (
             <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>{title} LoRA Adapter</Text>
                 <PopupMenu
                     placement="top"
-                    icon="caretdown"
+                    icon="caretdown" as AntDesignIconNames
                     disabled={disabled}
                     options={[
                         ...(availableLoRAs.length > 0
                             ? availableLoRAs.map((file) => ({
                                   label: file.name,
                                   onPress: () => onSelect(file),
+                                  icon: 'file1' as AntDesignIconNames,
                               }))
                             : []),
                         {
                             label: '--- Clear LoRA ---',
                             onPress: () => onSelect(null),
-                            icon: 'close',
+                            icon: 'close' as AntDesignIconNames,
                         },
                         {
                             label: 'Import New LoRA File',
                             onPress: () => handlePickAndCopyFile('lora'),
-                            icon: 'pluscircleo',
+                            icon: 'pluscircleo' as AntDesignIconNames,
                         },
                     ]}>
                     <View style={styles.selectionDisplay}>
@@ -355,21 +361,21 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 </PopupMenu>
                 {selectedFile && (
                     <Text style={styles.selectedModelInfo}>
-                        Size: {Llama.readableFileSize(selectedFile.size)}
+                        Size: {LlamaModule.readableFileSize(selectedFile.size)}
                     </Text>
                 )}
             </View>
         )
     }
 
-    // Get currently loaded RAG models from LlamaLocal's internal state
-    const currentEmbeddingContextModel = Llama.useLlama.getState().loadedEmbeddingModel
-    const currentReasoningContextModel = Llama.useLlama.getState().loadedRagReasoningModel
+    // Get currently loaded RAG models from LlamaModule.useLlama.getState()
+    // Now these properties exist on LlamaState
+    const { loadedEmbeddingModelInContext: currentEmbeddingContextModel, loadedRagReasoningModelInContext: currentReasoningContextModel } = LlamaModule.useLlama.getState();
+
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             <Text style={styles.heading}>RAG Model Configuration</Text>
-            {/* Embedding Model Selection */}
             {renderModelPicker(
                 embeddingModelId,
                 'rag_embedding',
@@ -384,16 +390,15 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <ThemedButton
                     label={
                         modelLoading &&
-                        Llama.useLlama.getState().loadedEmbeddingModel?.id === embeddingModelId
+                        currentEmbeddingContextModel?.id === embeddingModelId // Use new Zustand state
                             ? 'Loading...'
                             : 'Load Embedding Context'
                     }
                     onPress={() => handleLoadContext('embedding')}
-                    disabled={!embeddingModelId ?? modelLoading ?? modelImporting}
-                    // Show activity indicator if this specific model is loading
+                    disabled={!embeddingModelId || modelLoading || modelImporting}
                     showActivityIndicator={
                         modelLoading &&
-                        Llama.useLlama.getState().loadedEmbeddingModel?.id === embeddingModelId
+                        currentEmbeddingContextModel?.id === embeddingModelId // Use new Zustand state
                     }
                     size="small"
                 />
@@ -402,14 +407,12 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                         modelLoading && !embeddingModelId
                             ? 'Unloading...'
                             : 'Unload Embedding Context'
-                    } // Adjusted label for unloading
+                    }
                     onPress={() => handleUnloadContext('embedding')}
-                    disabled={!currentEmbeddingContextModel ?? (modelLoading || modelImporting)}
+                    disabled={!currentEmbeddingContextModel || modelLoading || modelImporting}
                     size="small"
-                    type="warning"
                 />
             </View>
-            {/* Reasoning Model Selection */}
             {renderModelPicker(
                 ragReasoningModelId,
                 'rag_reasoning',
@@ -424,18 +427,15 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <ThemedButton
                     label={
                         modelLoading &&
-                        Llama.useLlama.getState().loadedRagReasoningModel?.id ===
-                            ragReasoningModelId
+                        currentReasoningContextModel?.id === ragReasoningModelId // Use new Zustand state
                             ? 'Loading...'
                             : 'Load Reasoning Context'
                     }
                     onPress={() => handleLoadContext('reasoning')}
                     disabled={!ragReasoningModelId || modelLoading || modelImporting}
-                    // Show activity indicator if this specific model is loading
                     showActivityIndicator={
                         modelLoading &&
-                        Llama.useLlama.getState().loadedRagReasoningModel?.id ===
-                            ragReasoningModelId
+                        currentReasoningContextModel?.id === ragReasoningModelId // Use new Zustand state
                     }
                     size="small"
                 />
@@ -444,16 +444,14 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                         modelLoading && !ragReasoningModelId
                             ? 'Unloading...'
                             : 'Unload Reasoning Context'
-                    } // Adjusted label for unloading
+                    }
                     onPress={() => handleUnloadContext('reasoning')}
                     disabled={!currentReasoningContextModel || modelLoading || modelImporting}
                     size="small"
-                    type="warning"
                 />
             </View>
             <View style={styles.divider} />
             <Text style={styles.heading}>App Settings</Text>
-            {/* General App Settings */}
             <View style={styles.settingItem}>
                 <Text style={styles.settingLabel}>Save KV Cache Locally</Text>
                 <Switch value={saveLocalKV} onValueChange={setSaveLocalKV} />
@@ -466,7 +464,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <Text style={styles.settingLabel}>Show Model Info in Chat</Text>
                 <Switch value={showModelInChat} onValueChange={setShowModelInChat} />
             </View>
-            <View style={{ height: spacing.xl4 }} /> {/* Spacer */}
+            <View style={{ height: spacing.xl3 }} />
         </ScrollView>
     )
 }
@@ -524,7 +522,7 @@ const useStyles = () => {
         loadedStatus: {
             fontSize: fontSize.m,
             fontWeight: 'bold',
-            color: color.primary._500, // Or a distinct "active" color
+            color: color.primary._500,
             marginLeft: spacing.s,
         },
         buttonRow: {

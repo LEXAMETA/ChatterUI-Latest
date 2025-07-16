@@ -32,19 +32,22 @@ let loadedMainChatModel: ModelDataType | null = null
 
 const sessionFile = `${AppDirectory.SessionPath}llama-session.bin`
 
-const defaultConfig: ContextParams = {
-    context_length: 4096,
-    threads: 4,
-    gpu_layers: 0,
-    batch: 512,
-}
+// Define a type for default context parameters that do NOT include the model path
+// We can use Omit or just define the properties directly that are part of ContextParams but exclude 'model'
+type DefaultContextConfig = Omit<ContextParams, 'model'>;
 
-// Removed: MMKV keys for persistent LoRA URIs - Zustand's partialize handles this now.
-// const SELECTED_EMBEDDING_LORA_URI_KEY = 'selectedEmbeddingLoRAUri';
-// const SELECTED_REASONING_LORA_URI_KEY = 'selectedReasoningLoRAUri';
+// Correct ContextParams properties - now typed as DefaultContextConfig
+const defaultConfig: DefaultContextConfig = {
+    n_ctx: 4096,
+    n_threads: 4,
+    n_gpu_layers: 0,
+    n_batch: 512,
+    // Note: 'model' is explicitly omitted here, as it's provided at load time.
+};
+
 
 export type EngineDataProps = {
-    config: ContextParams
+    config: DefaultContextConfig // Use DefaultContextConfig here
     lastModel?: ModelDataType
     embeddingModelId?: number | null
     ragReasoningModelId?: number | null
@@ -52,8 +55,8 @@ export type EngineDataProps = {
     selectedEmbeddingLoRAUri: string | null
     selectedReasoningLoRAUri: string | null
 
-    setConfiguration: (config: ContextParams) => void
-    setLastModelLoaded: (model: ModelDataType) => void
+    setConfiguration: (config: DefaultContextConfig) => void // Use DefaultContextConfig here
+    setLastModelLoaded: (model: ModelDataType | undefined) => void
     setEmbeddingModelId: (id: number | null) => void
     setRagReasoningModelId: (id: number | null) => void
 
@@ -76,7 +79,6 @@ export const useEngineData = create<EngineDataProps>()(
             setEmbeddingModelId: (id) => set(() => ({ embeddingModelId: id })),
             setRagReasoningModelId: (id) => set(() => ({ ragReasoningModelId: id })),
 
-            // Removed mmkv.set calls - Zustand's persist middleware handles this automatically
             setSelectedEmbeddingLoRAUri: (uri) => {
                 set({ selectedEmbeddingLoRAUri: uri })
             },
@@ -91,14 +93,11 @@ export const useEngineData = create<EngineDataProps>()(
                 lastModel: state.lastModel,
                 embeddingModelId: state.embeddingModelId,
                 ragReasoningModelId: state.ragReasoningModelId,
-                // These are included here, so Zustand's persist middleware will save/load them
                 selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
                 selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
             }),
             storage: createJSONStorage(() => mmkvStorage),
-            version: 3, // Increment version as persistence logic for LoRA URIs has changed again
-            // Removed onRehydrateStorage for LoRA URIs - partialize and createJSONStorage handle it now.
-            // The previous onRehydrateStorage manually loaded from MMKV. Now, Zustand handles it.
+            version: 3,
         }
     )
 )
@@ -150,15 +149,15 @@ async function loadModelContext(
             )
     }
 
+    // When creating the actual params for initLlama, we combine the default config
+    // with the dynamic model path.
     const params: ContextParams = {
-        model: model.file_path,
-        n_ctx: config.context_length,
-        n_threads: config.threads,
-        n_batch: config.batch,
+        model: model.file_path, // This is the required 'model' property
+        ...config, // Spread the default properties from defaultConfig
         embedding: isEmbeddingModel,
         lora: loraPath ?? undefined,
         use_mlock: true,
-        n_gpu_layers: 99,
+        n_gpu_layers: 99, // Overwrite if config.n_gpu_layers is 0 and you always want 99
         ctx_shift: false,
     }
 
@@ -202,7 +201,7 @@ export async function getEmbeddingLlamaContext(
         embeddingLlamaContext = context
         loadedEmbeddingModel = model
         loadedEmbeddingLoRAPath = loraPath
-        useEngineData.getState().setSelectedEmbeddingLoRAUri(loraPath) // Update Zustand state on successful load
+        useEngineData.getState().setSelectedEmbeddingLoRAUri(loraPath)
     }
     return embeddingLlamaContext
 }
@@ -232,7 +231,7 @@ export async function getRagReasoningLlamaContext(
         ragReasoningLlamaContext = context
         loadedRagReasoningModel = model
         loadedRagReasoningLoRAPath = loraPath
-        useEngineData.getState().setSelectedReasoningLoRAUri(loraPath) // Update Zustand state on successful load
+        useEngineData.getState().setSelectedReasoningLoRAUri(loraPath)
     }
     return ragReasoningLlamaContext
 }
@@ -272,8 +271,8 @@ export async function unloadEmbeddingLlamaContext() {
         embeddingLlamaContext = null
         loadedEmbeddingModel = null
         loadedEmbeddingLoRAPath = null
-        useEngineData.getState().setEmbeddingModelId(null) // Clear base model ID
-        useEngineData.getState().setSelectedEmbeddingLoRAUri(null) // Clear LoRA URI
+        useEngineData.getState().setEmbeddingModelId(null)
+        useEngineData.getState().setSelectedEmbeddingLoRAUri(null)
         Logger.info('Embedding Llama context unloaded.')
     }
 }
@@ -284,8 +283,8 @@ export async function unloadRagReasoningLlamaContext() {
         ragReasoningLlamaContext = null
         loadedRagReasoningModel = null
         loadedRagReasoningLoRAPath = null
-        useEngineData.getState().setRagReasoningModelId(null) // Clear base model ID
-        useEngineData.getState().setSelectedReasoningLoRAUri(null) // Clear LoRA URI
+        useEngineData.getState().setRagReasoningModelId(null)
+        useEngineData.getState().setSelectedReasoningLoRAUri(null)
         Logger.info('RAG Reasoning Llama context unloaded.')
     }
 }
@@ -295,14 +294,10 @@ export async function unloadMainChatLlamaContext() {
         await mainChatLlamaContext.release()
         mainChatLlamaContext = null
         loadedMainChatModel = null
-        useEngineData.getState().setLastModelLoaded(undefined) // Clear last loaded main chat model
+        useEngineData.getState().setLastModelLoaded(undefined)
         Logger.info('Main Chat Llama context unloaded.')
     }
 }
-
-// Main chat UI Zustand store and helpers omitted for brevity; implement as needed.
-
-// Main chat UI Zustand store
 
 export type CompletionTimings = {
     predicted_per_token_ms: number
@@ -321,15 +316,13 @@ export type CompletionOutput = {
     timings: CompletionTimings
 }
 
-// lib/engine/Local/LlamaLocal.ts (excerpt of LlamaState and loadCurrentChatModel)
-
 export type LlamaState = {
     currentChatContext: LlamaContext | undefined
     currentChatModel: ModelDataType | undefined
     loadProgress: number
     chatCount: number
     promptCache?: string
-    loadCurrentChatModel: (model: ModelDataType) => Promise<boolean> // Changed return type to Promise<boolean>
+    loadCurrentChatModel: (model: ModelDataType) => Promise<boolean>
     setLoadProgress: (progress: number) => void
     unloadCurrentChatModel: () => Promise<void>
     saveKV: (prompt?: string) => Promise<void>
@@ -351,23 +344,17 @@ export const useLlama = create<LlamaState>()((set, get) => ({
     chatCount: 0,
 
     loadCurrentChatModel: async (model: ModelDataType): Promise<boolean> => {
-        // Explicitly define return type
         if (get().currentChatModel?.id === model.id && get().currentChatContext) {
             Logger.info('Main Chat Model Already Loaded!')
-            return true // Indicate success if already loaded
+            return true
         }
 
         if (model.model_type !== 'main_chat') {
             Logger.errorToast(
                 `Attempted to load non-main_chat model as current chat model: ${model.name} (${model.model_type})`
             )
-            return false // Indicate failure
+            return false
         }
-
-        // Set modelLoading true (if you have this state in LlamaLocal or pass it via context/Zustand)
-        // For now, ModelManager handles this, but if LlamaLocal should also manage a "loading" state
-        // for the main chat model internally, you'd add it here.
-        // Llama.useLlama.setState({ isModelLoading: true }); // Example
 
         const { context, model: loadedModel } = await loadModelContext(
             model.id,
@@ -378,21 +365,19 @@ export const useLlama = create<LlamaState>()((set, get) => ({
         )
 
         if (!context) {
-            // Llama.useLlama.setState({ isModelLoading: false }); // Example
-            return false // Indicate failure if context not obtained
+            return false
         }
 
         set({
             currentChatContext: context,
             currentChatModel: loadedModel!,
             chatCount: 1,
-            loadProgress: 100, // Assuming 100% on successful load
+            loadProgress: 100,
         })
 
         useEngineData.getState().setLastModelLoaded(loadedModel!)
         KV.useKVState.getState().setKvCacheLoaded(false)
-        // Llama.useLlama.setState({ isModelLoading: false }); // Example
-        return true // Indicate success
+        return true
     },
 
     setLoadProgress: (progress: number) => {
@@ -518,13 +503,15 @@ function textTimings(timings: CompletionTimings): string {
     )
 }
 
-// lib/engine/Local/LlamaLocal.ts
-
-// (All your existing code here ...)
-
-// Add this at the very end of the file:
-
-// Export a Llama namespace wrapping the useLlama Zustand hook
-export namespace Llama {
-    export const useLlama = useLlama
+// Re-export necessary types and constants to be accessible via 'Llama' namespace alias in other files
+export {
+    AppDirectory,
+    readableFileSize,
+    FileSystem,
+    initLlama, // initLlama is a function, keep as value export
+}
+// Use 'export type' for type-only re-exports
+export type {
+    LlamaContext, // LlamaContext is a type
+    CompletionParams, // CompletionParams is a type
 }

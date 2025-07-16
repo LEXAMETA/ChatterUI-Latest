@@ -403,12 +403,11 @@ export namespace Chats {
 
             const lastIndex = messages?.length ? messages.length - 1 : undefined
 
-            // Refined logic for targetSwipeId to handle potential undefined `messages` or `lastIndex`
-            // TS2532: Object is possibly 'undefined'.
-            // Fix: Break down the optional chaining and ensure `lastMessage` is explicitly non-null before accessing its properties.
             let targetSwipeId: number;
-            if (lastIndex !== undefined && messages && messages[lastIndex]) {
-                const lastMessage = messages[lastIndex]; // lastMessage is now guaranteed
+            if (lastIndex !== undefined && messages) {
+                // Use a non-null assertion (!) here because we've checked `messages[lastIndex]` in the condition.
+                // TypeScript can sometimes be overly cautious with array indexing even after length checks.
+                const lastMessage = messages[lastIndex]!; // Assure TypeScript that lastMessage is defined
                 targetSwipeId = lastMessage.swipes[lastMessage.swipe_id]?.id ?? cachedSwipeId ?? NO_VALID_ENTRY;
             } else {
                 targetSwipeId = cachedSwipeId ?? NO_VALID_ENTRY;

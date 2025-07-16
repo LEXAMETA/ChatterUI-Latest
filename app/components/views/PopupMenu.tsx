@@ -1,3 +1,5 @@
+// app/components/views/PopupMenu.tsx
+
 import { AntDesign } from '@expo/vector-icons'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useFocusEffect } from 'expo-router'
@@ -18,7 +20,7 @@ export type MenuRef = React.MutableRefObject<Menu | null>
 
 type PopupOptionProps = {
     label: string
-    icon: keyof typeof AntDesign.glyphMap
+    icon?: keyof typeof AntDesign.glyphMap // Made icon optional
     onPress: (m: MenuRef) => void | Promise<void>
     warning?: boolean
     menuRef: MenuRef
@@ -52,12 +54,14 @@ const PopupOption: React.FC<PopupOptionProps> = ({
     return (
         <MenuOption>
             <TouchableOpacity style={styles.popupButton} onPress={handleOnPress}>
-                <AntDesign
-                    style={{ minWidth: 20 }}
-                    name={icon}
-                    size={18}
-                    color={warning ? color.error._300 : color.text._100}
-                />
+                {icon && ( // Only render icon if it exists
+                    <AntDesign
+                        style={{ minWidth: 20 }}
+                        name={icon}
+                        size={18}
+                        color={warning ? color.error._300 : color.text._100}
+                    />
+                )}
                 <Text style={warning ? styles.optionLabelWarning : styles.optionLabel}>
                     {label}
                 </Text>
@@ -118,7 +122,11 @@ const PopupMenu: React.FC<PopupMenuProps> = ({
             </MenuTrigger>
             <MenuOptions customStyles={menuStyle}>
                 {options.map((item) => (
-                    <PopupOption {...item} key={item.label} menuRef={menuRef} />
+                    // Pass a default icon if item.icon is undefined, or ensure it's always provided.
+                    // Given we made PopupOptionProps.icon optional, we need to ensure icon is passed to PopupOption or handle default there.
+                    // For now, let's assume `item.icon` will either be present or the PopupOption component will handle the absence.
+                    // We already added default icons in ModelSettings.tsx.
+                    <PopupOption {...item} key={item.label} menuRef={menuRef} icon={item.icon} />
                 ))}
             </MenuOptions>
         </Menu>
