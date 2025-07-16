@@ -9,9 +9,10 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
+
 import SectionTitle from './components/text/SectionTitle';
-import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File'; // Your utils
-import { useTheme } from '../lib/theme/ThemeManager';
+import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File';
+import { Theme } from '../lib/theme/ThemeManager';
 import { ContextParams } from 'cui-llama.rn';
 import { LlamaContext, initLlama } from 'cui-llama.rn';
 import { NativeEmbeddingResult } from 'cui-llama.rn/lib/typescript/NativeRNLlama';
@@ -22,19 +23,19 @@ import { rawdb } from '@db';
 // --- Zustand Store for Embedding State ---
 type EmbeddingStoreState = {
   model: LlamaContext | undefined;
-  loadModel: (preset: LlamaConfig) => Promise<void>;
+  loadModel: (preset: ContextParams) => Promise<void>;
   getEmbedding: (text: string) => Promise<NativeEmbeddingResult | undefined>;
 };
 
 export const useEmbeddingStore = create<EmbeddingStoreState>()((set, get) => ({
   model: undefined,
-  loadModel: async (preset: LlamaConfig) => {
+  loadModel: async (preset: ContextParams) => {
     try {
       await FileSystem.makeDirectoryAsync(AppDirectory.ModelPath, { intermediates: true });
       const model = await initLlama({
         model: AppDirectory.ModelPath + 'allminifp16.gguf',
-        n_threads: preset.threads,
-        n_batch: preset.batch,
+        n_threads: preset.n_threads,
+        n_batch: preset.n_batch,
         embedding: true,
       });
       if (!model) {
@@ -84,11 +85,12 @@ const createTables = async () => {
 const insertData = async () => {
   try {
     rawdb.runSync(`insert into vec_examples(id, sample_embedding)
-    values
-      (1, '[-0.200, 0.250, 0.341, -0.211, 0.645, 0.935, -0.316, -0.924]'),
-      (2, '[0.443, -0.501, 0.355, -0.771, 0.707, -0.708, -0.185, 0.362]'),
-      (3, '[0.716, -0.927, 0.134, 0.052, -0.669, 0.793, -0.634, -0.162]'),
-      (4, '[-0.710, 0.330, 0.656, 0.041, -0.990, 0.726, 0.385, -0.958]');`);
+      values
+        (1, '[-0.200, 0.250, 0.341, -0.211, 0.645, 0.935, -0.316, -0.924]'),
+        (2, '[0.443, -0.501, 0.355, -0.771, 0.707, -0.708, -0.185, 0.362]'),
+        (3, '[0.716, -0.927, 0.134, 0.052, -0.669, 0.793, -0.634, -0.162]'),
+        (4, '[-0.710, 0.330, 0.656, 0.041, -0.990, 0.726, 0.385, -0.958]')
+    `);
     console.log('Sample data inserted.');
   } catch (e) {
     console.error('Error inserting data:', e);
@@ -98,80 +100,51 @@ const insertData = async () => {
 interface EmbeddingScreenProps {}
 
 export default function EmbeddingScreen(props: EmbeddingScreenProps) {
-  const { colors } = useTheme();
+  // Get the complete theme object
+  const theme = Theme.useTheme();
 
   const [loadingFile, setLoadingFile] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileContentPreview, setFileContentPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Llama model and embedding from Zustand store
   const { loadModel, getEmbedding } = useEmbeddingStore((state) => ({
     loadModel: state.loadModel,
     getEmbedding: state.getEmbedding,
   }));
 
-  // Text inputs for embedding comparison
   const [textInput1, setTextInput1] = useState<string>('');
   const [textInput2, setTextInput2] = useState<string>('');
   const [embeddingOutput, setEmbeddingOutput] = useState<string>('');
 
-  // Example LlamaConfig (adjust as needed)
-const llamaConfig: ContextParams = {
-  threads: 4,
-  batch: 512,
-};
+  const llamaConfig: ContextParams = {
+    model: AppDirectory.ModelPath + 'allminifp16.gguf',
+    n_threads: 4,
+    n_batch: 512,
+  };
 
-  // Enhanced document picker handler with null/undefined checks
   const handlePickDataset = async () => {
     setLoadingFile(true);
     setFileName(null);
     setFileContentPreview(null);
     setError(null);
     try {
-      // The `pickFile` utility function should return `DocumentPicker.DocumentPickerResult | null`
       const result = await pickFile('text/*');
 
-      if (!result) { // If pickFile returns null (e.g., operation was cancelled or failed internally)
+      if (!result) {
         setFileName('Document picking cancelled or failed.');
         setLoadingFile(false);
         return;
       }
 
-      // TS2339: Property 'canceled' does not exist on type 'PickedFileInfo'.
-      // This means `pickFile` returns `PickedFileInfo`, which is not directly `DocumentPickerResult`.
-      // Your `lib/utils/File.ts` needs to define `PickedFileInfo` as a union.
-      // Assuming `PickedFileInfo` is `DocumentPicker.DocumentPickerSuccessResult | DocumentPicker.DocumentPickerCancelledResult`
-      if (result.canceled) { // This now correctly checks if the picking was canceled.
-        setFileName('Document picking cancelled.');
-        setLoadingFile(false);
-        return;
-      }
+      setFileName(result.name);
+      const content = await readFileContent(result.uri);
 
-      // After the `if (result.canceled)` check, TypeScript should know `result` is `DocumentPicker.DocumentPickerSuccessResult`.
-      // TS2339: Property 'assets' does not exist on type 'PickedFileInfo'.
-      // This is still an issue if `PickedFileInfo` isn't properly a union.
-      // If `pickFile` is *already* handling the `canceled` state and only returning successful `assets`,
-      // then `result` itself is `PickedFileInfo` (which likely has an `assets` property if it's successful).
-      // Let's assume `result` is of a type that might have `assets` or `canceled`.
-      // If `pickFile` only returns *success* data, then `result` would be `DocumentPicker.DocumentPickerAsset[]` or similar.
-      // Re-examining `lib/utils/File.ts` will clarify `pickFile`'s return type.
-
-      // For now, let's keep the nullish coalescing to be safe with `result.assets`.
-      // The ideal fix is to ensure `pickFile`'s return type is accurate and then leverage type narrowing.
-      const fileInfo = result.assets?.[0]; // If `result` is from DocumentPicker.DocumentPickerSuccessResult, `assets` exists.
-
-      if (fileInfo) {
-        setFileName(fileInfo.name);
-        const content = await readFileContent(fileInfo.uri);
-        if (content != null) { // Check for null or undefined content
-          setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
-          // TODO: pass content to your RAG system or embedding logic here
-        } else {
-          setError('Failed to read file content or content is empty.');
-        }
+      if (content != null) {
+        setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
+        // Place to add embedding or processing logic
       } else {
-        setError('No file asset found after selection.');
+        setError('Failed to read file content.');
       }
     } catch (e: any) {
       console.error('Error picking or reading dataset:', e);
@@ -210,22 +183,25 @@ const llamaConfig: ContextParams = {
     const v1 = await getEmbedding(textInput1);
     const v2 = await getEmbedding(textInput2);
 
-    // TS2532: Object is possibly 'undefined'. (on v1.embedding[i], v2.embedding[i])
-    // Consolidated checks for v1, v2, v1.embedding, and v2.embedding
-    if (!v1?.embedding || !v2?.embedding) { // Use optional chaining to check for embedding property safely
+    if (!v1?.embedding || !v2?.embedding) {
       setEmbeddingOutput('Failed to get embeddings for one or both texts.');
       return;
     }
 
+    // Explicitly type to satisfy TypeScript's strictness after null check
+    const embedding1: number[] = v1.embedding;
+    const embedding2: number[] = v2.embedding;
+
     let s1 = 0,
       s2 = 0,
       dotprod = 0;
-    // We can now safely access v1.embedding and v2.embedding because of the check above.
-    const minLength = Math.min(v1.embedding.length, v2.embedding.length);
+
+    const minLength = Math.min(embedding1.length, embedding2.length);
     for (let i = 0; i < minLength; i++) {
-      dotprod += v1.embedding[i] * v2.embedding[i];
-      s1 += v1.embedding[i] ** 2;
-      s2 += v2.embedding[i] ** 2;
+      dotprod += embedding1[i] * embedding2[i];
+      // Type assertion or prior non-null check handles 'possibly undefined'
+      s1 += embedding1[i]! ** 2; // Add non-null assertion here
+      s2 += embedding2[i]! ** 2; // Add non-null assertion here
     }
 
     const similarity = dotprod / (Math.sqrt(s1) * Math.sqrt(s2));
@@ -233,45 +209,45 @@ const llamaConfig: ContextParams = {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SectionTitle title="RAG Dataset Management" />
+    <View style={[styles.container, { backgroundColor: theme.color.background }]}>
+      <SectionTitle>RAG Dataset Management</SectionTitle>
       <Button title="Load Dataset from Device" onPress={handlePickDataset} disabled={loadingFile} />
 
-      {loadingFile && <ActivityIndicator color={colors.primary} style={styles.indicator} />}
-      {fileName && <Text style={[styles.text, { color: colors.text }]}>Selected File: {fileName}</Text>}
+      {loadingFile && <ActivityIndicator color={theme.color.primary} style={styles.indicator} />}
+      {fileName && <Text style={[styles.text, { color: theme.color.text._900 }]}>Selected File: {fileName}</Text>}
       {fileContentPreview && (
-        <View style={[styles.previewContainer, { backgroundColor: colors.card }]}>
-          <Text style={[styles.previewText, { color: colors.text }]}>
+        <View style={[styles.previewContainer, { backgroundColor: theme.color.card }]}>
+          <Text style={[styles.previewText, { color: theme.color.text._900 }]}>
             Content Preview:{"\n"}
             {fileContentPreview}
           </Text>
         </View>
       )}
-      {error && <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>}
+      {error && <Text style={[styles.errorText, { color: theme.color.error._500 }]}>{error}</Text>}
 
       <View style={styles.separator} />
 
-      <SectionTitle title="Llama Embedding & Vector DB" />
-      <TouchableOpacity onPress={() => loadModel(llamaConfig)} style={[styles.button, { backgroundColor: colors.primary }]}>
-        <Text style={[styles.buttonText, { color: colors.buttonText }]}>Load Llama Embedding Model</Text>
+      <SectionTitle>Llama Embedding & Vector DB</SectionTitle>
+      <TouchableOpacity onPress={() => loadModel(llamaConfig)} style={[styles.button, { backgroundColor: theme.color.primary }]}>
+        <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Load Llama Embedding Model</Text>
       </TouchableOpacity>
 
       <TextInput
         value={textInput1}
         onChangeText={setTextInput1}
         placeholder="Enter text 1 for embedding"
-        placeholderTextColor={colors.text._400}
-        style={[styles.textInput, { color: colors.text._100, borderColor: colors.text._400 }]}
+        placeholderTextColor={theme.color.text._400}
+        style={[styles.textInput, { color: theme.color.text._100, borderColor: theme.color.text._400 }]}
       />
       <TextInput
         value={textInput2}
         onChangeText={setTextInput2}
         placeholder="Enter text 2 for embedding"
-        placeholderTextColor={colors.text._400}
-        style={[styles.textInput, { color: colors.text._100, borderColor: colors.text._400 }]}
+        placeholderTextColor={theme.color.text._400}
+        style={[styles.textInput, { color: theme.color.text._100, borderColor: theme.color.text._400 }]}
       />
-      <TouchableOpacity onPress={handleTestEmbedding} style={[styles.button, { backgroundColor: colors.accent }]}>
-        <Text style={[styles.buttonText, { color: colors.buttonText }]}>Calculate Embedding Similarity</Text>
+      <TouchableOpacity onPress={handleTestEmbedding} style={[styles.button, { backgroundColor: theme.color.accent }]}>
+        <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Calculate Embedding Similarity</Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => {
@@ -279,28 +255,30 @@ const llamaConfig: ContextParams = {
           setTextInput2('');
           setEmbeddingOutput('');
         }}
-        style={[styles.button, { backgroundColor: colors.secondary }]}
+        style={[styles.button, { backgroundColor: theme.color.secondary }]}
       >
-        <Text style={[styles.buttonText, { color: colors.buttonText }]}>Clear Text Inputs</Text>
+        <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Clear Text Inputs</Text>
       </TouchableOpacity>
 
-      {embeddingOutput ? <Text style={[styles.outputText, { color: colors.text._100 }]}>{embeddingOutput}</Text> : null}
+      {embeddingOutput && (
+        <Text style={[styles.outputText, { color: theme.color.text._100 }]}>{embeddingOutput}</Text>
+      )}
 
       <View style={styles.separator} />
 
-      <SectionTitle title="Vector Database Operations" />
+      <SectionTitle>Vector Database Operations</SectionTitle>
       <View style={styles.dbButtonContainer}>
-        <TouchableOpacity onPress={deleteTables} style={[styles.smallButton, { backgroundColor: colors.error }]}>
-          <Text style={[styles.buttonText, { color: colors.buttonText }]}>Delete DB</Text>
+        <TouchableOpacity onPress={deleteTables} style={[styles.smallButton, { backgroundColor: theme.color.error }]}>
+          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Delete DB</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={createTables} style={[styles.smallButton, { backgroundColor: colors.primary }]}>
-          <Text style={[styles.buttonText, { color: colors.buttonText }]}>Make DB</Text>
+        <TouchableOpacity onPress={createTables} style={[styles.smallButton, { backgroundColor: theme.color.primary }]}>
+          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Make DB</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={insertData} style={[styles.smallButton, { backgroundColor: colors.secondary }]}>
-          <Text style={[styles.buttonText, { color: colors.buttonText }]}>Insert Data</Text>
+        <TouchableOpacity onPress={insertData} style={[styles.smallButton, { backgroundColor: theme.color.secondary }]}>
+          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Insert Data</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleQueryDatabase} style={[styles.smallButton, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.buttonText, { color: colors.buttonText }]}>Query DB</Text>
+        <TouchableOpacity onPress={handleQueryDatabase} style={[styles.smallButton, { backgroundColor: theme.color.accent }]}>
+          <Text style={[styles.buttonText, { color: theme.color.buttonText }]}>Query DB</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -331,7 +309,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 12,
-    color: 'red',
+    color: 'red', // This might be overridden by the theme.color.error._500
   },
   separator: {
     height: 1,
