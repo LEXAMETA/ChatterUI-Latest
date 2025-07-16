@@ -19,7 +19,7 @@ import { z } from 'zod'
 import { AppDirectory } from './File'
 import { lockScreenOrientation } from './Screen'
 import { AppSettings, AppSettingsDefault, Global } from '../constants/GlobalValues'
-import { Llama } from '../engine/Local/LlamaLocal'
+import { useLlama } from '../engine/Local/LlamaLocal'   // <-- Changed here
 import { Characters } from '../state/Characters'
 import { Chats } from '../state/Chat'
 import { Logger } from '../state/Logger'
@@ -61,8 +61,6 @@ const setCPUFeatures = async () => {
 }
 
 const migrateModelData_0_7_10_to_0_8_0 = () => {
-    // Fix for 0.7.10 -> 0.8.0 LocalModel data
-    // Attempt to parse model, if this fails, delete the key
     const oldDef = `localmodel`
     try {
         const model = mmkv.getString(oldDef)
@@ -74,7 +72,6 @@ const migrateModelData_0_7_10_to_0_8_0 = () => {
 }
 
 const migrateModelData_0_8_4_to_0_8_5 = () => {
-    // `localmodel` is the definition of Global.LocalModel
     const oldDef = `localmodel`
     try {
         const modelData = mmkv.getString(oldDef)
@@ -82,16 +79,11 @@ const migrateModelData_0_8_4_to_0_8_5 = () => {
         const data = JSON.parse(modelData)
         if (!data) return
         mmkv.delete(oldDef)
-        Llama.useEngineData.getState().setLastModelLoaded(data)
+        useLlama.useEngineData.getState().setLastModelLoaded(data)  // Updated useLlama usage
     } catch (e) {}
 }
 
 const migrateTTSData_0_8_5_to_0_8_6 = () => {
-    /** previous Global enum data:
-        TTSSpeaker = 'ttsspeaker',
-        TTSEnable = 'ttsenable',
-        TTSAuto = `ttsauto`, 
-    */
     if (mmkv.getBoolean('ttsauto')) {
         mmkv.delete('ttsauto')
         useTTSState.getState().setAuto(true)
@@ -122,7 +114,6 @@ const migrateTTSData_0_8_5_to_0_8_6 = () => {
 }
 
 export const generateDefaultDirectories = async () => {
-    // Removed: 'instruct', 'persona', 'presets', 'lorebooks'
     Object.values(AppDirectory).map(async (dir) => {
         await makeDirectoryAsync(`${dir}`, {})
             .then(() =>
@@ -154,7 +145,6 @@ const migratePresets_0_8_3_to_0_8_4 = async () => {
 }
 
 const migrateAppMode_0_8_5_to_0_8_6 = () => {
-    // Old Global Value AppMode = 'appmode',
     const oldKey = 'appmode'
     const oldAppMode = mmkv.getString(oldKey)
     if (!oldAppMode) return
@@ -177,11 +167,11 @@ const setDefaultCharacter = async () => {
         Logger.error(
             'User database is Invalid, this should not happen! Please report this occurence.'
         )
-    } else if (userList?.length === 0) {
+    } else if (userList.length === 0) {
         Logger.warn('No Users exist, creating default Users')
         await createDefaultUserData()
     } else if (userList.length > 0 && !Characters.useUserCard.getState().card) {
-        Characters.useUserCard.getState().setCard(userList[0].id)
+        Characters.useUserCard.getState().setCard(userList[0].id)  // Safe access now
     }
 }
 
@@ -199,26 +189,16 @@ const setDefaultInstruct = () => {
 
 export const startupApp = () => {
     console.log('[APP STARTED]: T1APT')
-    // DEV: Needed for Reset
-    //Chats.useChatState.getState().reset()
-    //Characters.useCharacterCard.getState().unloadCard()
 
-    // Sets default preferences
     setAppDefaultSettings()
     generateDefaultDirectories()
     setDefaultCharacter()
     setDefaultInstruct()
 
-    // Initialize the default card
     createDefaultCard()
-
-    // get fp16, i8mm and dotprod data
     setCPUFeatures()
-
-    // Local Model Data in case external models are deleted
     Model.verifyModelList()
 
-    // migrations for old versions
     migrateModelData_0_7_10_to_0_8_0()
     migrateModelData_0_8_4_to_0_8_5()
     migratePresets_0_8_3_to_0_8_4()

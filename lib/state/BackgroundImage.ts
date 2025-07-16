@@ -26,8 +26,20 @@ export const useBackgroundImage = create<BackgroundImageStateProps>()(
                         type: 'image/*',
                     })
                     if (result.canceled) return
-                    const uri = result.assets[0].uri
-                    const name = result.assets[0].name
+
+                    if (!result.assets || result.assets.length === 0) {
+                        Logger.error('No assets returned from document picker.')
+                        return
+                    }
+
+                    const uri = result.assets[0]?.uri
+                    const name = result.assets[0]?.name
+
+                    if (!uri || !name) {
+                        Logger.error('Selected asset is missing uri or name.')
+                        return
+                    }
+
                     await copyAsync({ from: uri, to: AppDirectory.Assets + name })
 
                     set((state) => ({ ...state, image: name }))
@@ -36,6 +48,7 @@ export const useBackgroundImage = create<BackgroundImageStateProps>()(
                     Logger.error('Something went wrong with importing: ' + e)
                 }
             },
+
             removeImage: () => {
                 const imageName = get().image
                 if (imageName) deleteAsync(AppDirectory.Assets + imageName, { idempotent: true })

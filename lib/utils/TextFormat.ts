@@ -25,9 +25,11 @@ const detectFormat = (input: string): Formats => {
         const asteriskMatches = input.match(/\*([^*]*)\*/)
         if (asteriskMatches) {
             const asteriskContent = asteriskMatches[1]
-            const quoteMatchesInAsterisk = asteriskContent.match(/"([^"]*)"/)
-            if (quoteMatchesInAsterisk && quoteMatchesInAsterisk[1].split(' ').length > 1) {
-                return Formats.AsteriskActionQuoteSpeech
+            if (asteriskContent) {
+                const quoteMatchesInAsterisk = asteriskContent.match(/"([^"]*)"/)
+                if (quoteMatchesInAsterisk && quoteMatchesInAsterisk[1].split(' ').length > 1) {
+                    return Formats.AsteriskActionQuoteSpeech
+                }
             }
         }
         const quoteMatchesOutsideAsterisk = input.match(/"([^"]*)"/g)

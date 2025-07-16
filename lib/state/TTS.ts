@@ -24,18 +24,12 @@ type TTSState = {
     speak: (text: string, onDone?: () => void, onStop?: () => void) => void
     handleEndGeneration: (lastIndex: number, text: string) => Promise<void>
     handleStartGeneration: (lastIndex: number) => void
-    // stream TTS
     liveTTS: boolean
     pauseLive?: boolean
     setPauseLive: (b: boolean) => void
     buffer: string
     clearAndRunBuffer: (lastIndex: number) => void
     clearBuffer: () => void
-    /**
-     * Inserts text into the buffer, attempts TTS if valid sentence and adds remainder to buffer
-     * @param text text for TTS
-     * @returns
-     */
     insertBuffer: (text: string) => void
 }
 
@@ -94,7 +88,7 @@ useInference.subscribe(({ nowGenerating }) => {
     if (!length) return
     if (!nowGenerating) {
         const message = data?.messages?.[length - 1]
-        if (!message) return
+        if (!message || !message.swipes || !message.swipes[message.swipe_id]) return
         useTTSState
             .getState()
             .handleEndGeneration(length - 1, message.swipes[message.swipe_id].swipe)
@@ -131,8 +125,8 @@ export const useTTSState = create<TTSState>()(
                 const filteredchunks: string[] = []
                 const chunks = text.split(filter)
                 chunks.forEach((item, index) => {
-                    if (!filter.test(item) && item) return filteredchunks.push(item)
-                    if (index > 0)
+                    if (!filter.test(item) && item) filteredchunks.push(item)
+                    else if (index > 0)
                         filteredchunks[filteredchunks.length - 1] =
                             filteredchunks[filteredchunks.length - 1] + item
                 })
@@ -148,7 +142,7 @@ export const useTTSState = create<TTSState>()(
                         language: currentSpeaker?.language,
                         voice: currentSpeaker?.identifier,
                         onDone: () => {
-                            index === cleanedchunks.length - 1 && clearIndex()
+                            if (index === cleanedchunks.length - 1) clearIndex()
                         },
                         onStopped: () => clearIndex(),
                         rate: get().rate,
@@ -207,8 +201,6 @@ export const useTTSState = create<TTSState>()(
                 }
                 set({ pauseLive: false })
             },
-
-            // Stream Data
 
             buffer: '',
             clearAndRunBuffer: (lastIndex) => {
