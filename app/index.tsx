@@ -2,7 +2,8 @@ import HeaderTitle from '@components/views/HeaderTitle'
 import { db } from '@db'
 import { AntDesign } from '@expo/vector-icons'
 import { AppSettings } from '@lib/constants/GlobalValues'
-import { Llama } from '@lib/engine/Local/LlamaLocal'
+import { useLlama, type LlamaState } from '@lib/engine/Local/LlamaLocal'
+import { useEngineData, type EngineDataState } from '@lib/state/EngineData' // Corrected import path
 import useLocalAuth from '@lib/hooks/LocalAuth'
 import { Logger } from '@lib/state/Logger'
 import { useMMKVBoolean } from '@storage/MMKV';
@@ -26,8 +27,9 @@ const Home = () => {
   const [appReady, setAppReady] = useState(false)
 
   const [autoLoadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal)
-  const { lastModel, currentChatModel, loadCurrentChatModel, setLoadProgress } = Llama.useLlama(
-    (state) => ({
+  // FIX 2: Corrected useLlama access and added type for 'state'
+  const { lastModel, currentChatModel, loadCurrentChatModel, setLoadProgress } = useLlama(
+    (state: LlamaState) => ({ // <--- Type 'state' here
       lastModel: state.lastModel,
       currentChatModel: state.currentChatModel,
       loadCurrentChatModel: state.loadCurrentChatModel,

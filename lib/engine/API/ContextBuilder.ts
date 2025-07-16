@@ -86,11 +86,21 @@ export const buildTextCompletionContext = (max_length: number, printTimings = tr
     // we require lengths for names if use_names is enabled
     for (const message of messages.reverse()) {
         const swipe_len = Chats.useChatState.getState().getTokenCount(index)
-        const swipe_data = message.swipes[message.swipe_id]
+        const swipe_data = message.swipes[message.swipe_id] // Potential for undefined here
+
+        // ** FIX START **
+        // Check if swipe_data is undefined. If so, skip this message and continue to the next.
+        if (!swipe_data) {
+            Logger.warn(`Swipe data for message ID ${message.id} at swipe_id ${message.swipe_id} is missing. Skipping this message in context build.`)
+            index-- // Decrement index as this message is skipped
+            is_last = false // Ensure is_last logic correctly moves on
+            continue // Skip to the next message in the loop
+        }
+        // ** FIX END **
 
         /** Accumulate total string length
-         *  The context builder MUST retain context length below the
-         *  context limit, especially for local gens to prevent truncation
+         * The context builder MUST retain context length below the
+         * context limit, especially for local gens to prevent truncation
          * **/
 
         let instruct_len = message.is_user
@@ -100,12 +110,12 @@ export const buildTextCompletionContext = (max_length: number, printTimings = tr
               : instructCache.output_suffix_length
 
         // for last message, we want to skip the end token to allow the LLM to generate
-
         if (!is_last)
             instruct_len += message.is_user
                 ? instructCache.input_suffix_length
                 : instructCache.output_suffix_length
 
+        // Accessing swipe_data properties is now safe after the check
         const timestamp_string = `[${swipe_data.send_date.toString().split(' ')[0]} ${swipe_data.send_date.toLocaleTimeString()}]\n`
         const timestamp_length = currentInstruct.timestamp ? tokenizer(timestamp_string) : 0
 
@@ -123,7 +133,6 @@ export const buildTextCompletionContext = (max_length: number, printTimings = tr
         }
 
         // apply strings
-
         let message_shard = message.is_user
             ? currentInstruct.input_prefix
             : is_last
@@ -134,7 +143,7 @@ export const buildTextCompletionContext = (max_length: number, printTimings = tr
 
         if (currentInstruct.names) message_shard += name_string
 
-        message_shard += swipe_data.swipe
+        message_shard += swipe_data.swipe // Accessing swipe_data.swipe is now safe
 
         if (!is_last) {
             message_shard += `${message.is_user ? currentInstruct.input_suffix : currentInstruct.output_suffix}`
@@ -229,8 +238,19 @@ export const buildChatCompletionContext = (
 
     let index = messages.length - 1
     for (const message of messages.reverse()) {
-        const swipe_data = message.swipes[message.swipe_id]
+        const swipe_data = message.swipes[message.swipe_id] // Potential for undefined here
+
+        // ** FIX START **
+        // Check if swipe_data is undefined. If so, skip this message.
+        if (!swipe_data) {
+            Logger.warn(`Swipe data for message ID ${message.id} at swipe_id ${message.swipe_id} is missing. Skipping this message in chat context build.`)
+            index-- // Decrement index for the next iteration
+            continue // Skip to the next message in the loop
+        }
+        // ** FIX END **
+
         // special case for claude, prefill may be useful!
+        // Accessing swipe_data properties is now safe
         const timestamp_string = `[${swipe_data.send_date.toString().split(' ')[0]} ${swipe_data.send_date.toLocaleTimeString()}]\n`
         const timestamp_length = currentInstruct.timestamp ? tokenizer(timestamp_string) : 0
 
@@ -242,6 +262,7 @@ export const buildChatCompletionContext = (
 
         const prefill = index === messages.length - 1 ? values.prefill : ''
 
+        // Check swipe_data.swipe again here specifically for its content, after the initial swipe_data check
         if (!swipe_data.swipe && !prefill && index === messages.length - 1) {
             index--
             continue
@@ -249,7 +270,7 @@ export const buildChatCompletionContext = (
 
         messageBuffer.push({
             role: message.is_user ? completionFeats.userRole : completionFeats.assistantRole,
-            content: replaceMacros(prefill + swipe_data.swipe),
+            content: replaceMacros(prefill + swipe_data.swipe), // Accessing swipe_data.swipe is now safe
         })
         total_length += len
         index--
@@ -267,3 +288,4 @@ export const buildChatCompletionContext = (
 
     return output
 }
+

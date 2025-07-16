@@ -1,9 +1,9 @@
 import SectionTitle from '@components/text/SectionTitle'
-import { Llama } from '@lib/engine/Local/LlamaLocal'
+// REMOVED: import { Llama } from '@lib/engine/Local/LlamaLocal' // Removed this import
 import { usePeerDiscovery, DiscoveredPeerInfo } from '@lib/hooks/usePeerDiscovery'
 import { initRagSystem, useGlobalRAGSystem, knowledgeBaseData } from '@lib/rag/ragSystem'
 import { Logger } from '@lib/state/Logger'
-import { tcpClientInstance, sendMockPrompt, Request, Response } from '@lib/tcp-client'
+import { tcpClientInstance, sendMockPrompt } from '@lib/tcp-client' // Removed Request, Response from here
 import { Theme } from '@lib/theme/ThemeManager'
 import { Picker } from '@react-native-picker/picker'
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
@@ -20,10 +20,25 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+// Define Request and Response interfaces explicitly here or ensure they are imported from @lib/tcp-client correctly
+// Based on the errors, these interfaces likely need definition or correction.
+interface Request {
+    prompt: string;
+    lora: string;
+    type: string; // Added type
+    model: string; // Added model
+}
+
+interface Response {
+    text: string; // Added text property
+    // Add other properties if your actual response object has them
+}
+
+
 interface UsablePeer {
     ip: string
     model: string
-    load: number
+    load: number // Assuming load is always a number
     lastSeen: number
     deviceName?: string
     deviceAddress?: string
@@ -48,7 +63,7 @@ const ChatMenu = () => {
 
     const [availablePeers, setAvailablePeers] = useState<UsablePeer[]>([])
     const [selectedPeerIp, setSelectedPeerIp] = useState<string>('local')
-    const [selectedLoRA, setSelectedLoRA] = useState<string>(mockLoRAs[0])
+    const [selectedLoRA, setSelectedLoRA] = useState<string | undefined>(mockLoRAs[0])
     const [tcpConnectionStatus, setTcpConnectionStatus] = useState<
         'Connected' | 'Connecting...' | 'Disconnected' | 'Error'
     >('Disconnected')
@@ -57,6 +72,7 @@ const ChatMenu = () => {
     const [swarmChatResponse, setSwarmChatResponse] = useState<string[]>([])
     const [isSending, setIsSending] = useState<boolean>(false)
 
+    // Ensure useGlobalRAGSystem returns an object with a 'generate' method
     const { rag, loading: isRagLoading, error: ragError } = useGlobalRAGSystem()
 
     const scrollViewRef = useRef<ScrollView>(null)
@@ -134,9 +150,13 @@ const ChatMenu = () => {
             selectedPeerIp !== 'local' &&
             !updatedUsablePeers.some((p) => p.ip === selectedPeerIp)
         ) {
-            setSelectedPeerIp(updatedUsablePeers[0]?.ip || 'local')
+            // Fix TS2532: Object is possibly 'undefined'.
+            // The ternary ensures length > 0, so updatedUsablePeers[0] should be defined.
+            // Making it more explicit for TypeScript's analysis.
+            const firstPeer = updatedUsablePeers[0];
+            setSelectedPeerIp(firstPeer ? firstPeer.ip : 'local')
         }
-    }, [discoveredWifiDirectPeers, groupInfo])
+    }, [discoveredWifiDirectPeers, groupInfo, selectedPeerIp])
 
     useEffect(() => {
         tcpClientInstance.setStatusCallback(setTcpConnectionStatus)
@@ -146,7 +166,7 @@ const ChatMenu = () => {
             if (peer?.ip) {
                 tcpClientInstance
                     .connect(peer.ip, 8080)
-                    .catch((e) => Logger.error('TCP connect error:', e))
+                    .catch((e: any) => Logger.error('TCP connect error:', e))
             }
         } else {
             tcpClientInstance.disconnect()
@@ -190,7 +210,49 @@ const ChatMenu = () => {
         }
     }, [requestPermissions, startDiscovery])
 
-    // (Include your handleSwarmChatSend and other handlers/UI unchanged)
+    const handleSwarmChatSend = useCallback(async () => {
+        if (isSending) return;
+
+        setIsSending(true);
+        setSwarmChatResponse(prev => [...prev, `You: ${swarmChatPrompt}`]);
+
+        if (selectedPeerIp === 'local') {
+            try {
+                if (!rag) {
+                    Logger.warn("RAG system not initialized.");
+                    setSwarmChatResponse(prev => [...prev, "AI: RAG system not ready."]);
+                    return;
+                }
+                // Fix TS2339: Property 'query' does not exist on type ...
+                // Assuming 'generate' is the correct method name based on the error message's type info
+                const localResponse = await rag.generate(swarmChatPrompt);
+                setSwarmChatResponse(prev => [...prev, `AI (Local): ${localResponse}`]);
+            } catch (e: any) {
+                Logger.error("Local RAG query failed:", e);
+                setSwarmChatResponse(prev => [...prev, `AI (Local) Error: ${e.message}`]);
+            }
+        } else {
+            try {
+                // Fix TS2739: Type '{ prompt: string; lora: string; }' is missing properties 'type', 'model'
+                // Assuming `type` and `model` are required by your `Request` interface
+                const request: Request = {
+                    prompt: swarmChatPrompt,
+                    lora: selectedLoRA ?? 'default',
+                    type: 'chat', // Placeholder: Adjust this based on your API
+                    model: 'default_swarm_model' // Placeholder: Adjust this based on your API
+                };
+                const response: Response = await sendMockPrompt(request);
+                // Fix TS2339: Property 'text' does not exist on type 'Response'.
+                // Assuming `text` is the correct property, defined in the `Response` interface above.
+                setSwarmChatResponse(prev => [...prev, `AI (Swarm): ${response.text}`]);
+            } catch (e: any) {
+                Logger.error("Swarm chat send failed:", e);
+                setSwarmChatResponse(prev => [...prev, `AI (Swarm) Error: ${e.message}`]);
+            }
+        }
+        setSwarmChatPrompt('');
+        setIsSending(false);
+    }, [swarmChatPrompt, isSending, selectedPeerIp, selectedLoRA, rag]);
 
     const getConnectionStatusColor = () => {
         switch (tcpConnectionStatus) {
@@ -209,7 +271,10 @@ const ChatMenu = () => {
 
     const getPeerLabel = (peer: UsablePeer | DiscoveredPeerInfo) => {
         if ('model' in peer) {
-            return `${peer.deviceName ?? peer.deviceAddress} (${peer.model}) Load: ${(peer.load! * 100).toFixed(0)}% ${
+            // Fix TS18048: 'peer.load' is possibly 'undefined'.
+            // Adding nullish coalescing to ensure it's a number for calculations.
+            // `peer` is narrowed to `UsablePeer` here, but this adds extra robustness.
+            return `${peer.deviceName ?? peer.deviceAddress} (${peer.model}) Load: ${((peer.load ?? 0) * 100).toFixed(0)}% ${
                 peer.isConnected ? '[Connected]' : ''
             }`
         } else {

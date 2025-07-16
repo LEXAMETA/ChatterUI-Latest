@@ -2,20 +2,15 @@
 
 import { db } from '@db'
 import { Storage } from '@lib/enums/Storage'
-// NOTE: If AppDirectory and readableFileSize are truly defined in @lib/utils/File,
-// then these imports are correct and should NOT be redefined/exported here unless for re-export.
-// However, your provided LlamaLocal.ts defines AppDirectory locally.
-// If AppDirectory is also in @lib/utils/File, decide which is the canonical source.
-// Assuming for now the AppDirectory below is the one you intend to use and export from LlamaLocal.
-import { AppDirectory as FileAppDirectory, readableFileSize } from '@lib/utils/File' // Rename to avoid conflict if AppDirectory is defined locally
+import { AppDirectory as FileAppDirectory, readableFileSize } from '@lib/utils/File'
 
 import { ContextParams, LlamaContext, initLlama, CompletionParams, CompletionTimings } from 'cui-llama.rn'
 import { model_data, ModelDataType } from 'db/schema'
 import { eq } from 'drizzle-orm'
 import * as FileSystem from 'expo-file-system'
 import { getInfoAsync } from 'expo-file-system'
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { create } from 'zustand' // Keep this for useLlama
+import { persist, createJSONStorage } from 'zustand/middleware' // Keep this for useLlama
 
 import { checkGGMLDeprecated } from './GGML'
 import { KV } from './Model'
@@ -23,20 +18,18 @@ import { AppSettings } from '../../constants/GlobalValues'
 import { Logger } from '../../state/Logger'
 import { mmkv, mmkvStorage } from '../../storage/MMKV'
 
-// IMPORTANT: If AppDirectory is *only* defined here, make sure it's exported.
-// If it's also in '@lib/utils/File', you should either import it from there and use that,
-// or define it here and explicitly export it, being consistent across your app.
-// For the sake of resolving the ModelSettings.tsx errors, I'll assume this local AppDirectory
-// definition is the one you want exposed via LlamaModule.
-export const AppDirectory = { // EXPORTED
+// === NEW IMPORT ===
+import { useEngineData } from '../../state/EngineData'; // <--- Import useEngineData from its new location
+// ==================
+
+export const AppDirectory = {
   ModelPath: `${FileSystem.documentDirectory}models/`,
   SessionPath: `${FileSystem.documentDirectory}sessions/`,
   CharacterPath: `${FileSystem.documentDirectory}characters/`,
   Assets: `${FileSystem.documentDirectory}assets/`,
-  LoRAPath: `${FileSystem.documentDirectory}loras/`, // Added LoRA path here
+  LoRAPath: `${FileSystem.documentDirectory}loras/`,
 }
 
-// Global contexts (these do not need to be exported if only used internally or via specific getter functions)
 let embeddingLlamaContext: LlamaContext | null = null
 let ragReasoningLlamaContext: LlamaContext | null = null
 let mainChatLlamaContext: LlamaContext | null = null
@@ -60,8 +53,7 @@ const defaultConfig: DefaultContextConfig = {
   n_batch: 512,
 }
 
-// Export LlamaState type if other modules need to reference it directly
-export type LlamaState = { // EXPORTED
+export type LlamaState = {
   currentChatContext: LlamaContext | undefined
   currentChatModel: ModelDataType | undefined
   loadProgress: number
@@ -91,7 +83,7 @@ export type LlamaState = { // EXPORTED
   tokenize: (text: string) => { tokens: number[] } | undefined
 }
 
-export const useLlama = create<LlamaState>()((set, get) => ({ // EXPORTED
+export const useLlama = create<LlamaState>()((set, get) => ({
   currentChatContext: undefined,
   currentChatModel: undefined,
   loadProgress: 0,
@@ -138,18 +130,7 @@ export const useLlama = create<LlamaState>()((set, get) => ({ // EXPORTED
       loadProgress: 100,
     })
 
-    // This import needs to be resolved externally or re-exported from here
-    // Assuming useEngineData is from '@state/EngineData'
-    // For now, let's assume it's imported correctly in files that use LlamaLocal
-    // and that LlamaLocal itself just calls it.
-    // If you want LlamaModule.useEngineData, then useEngineData needs to be exported from here.
-    // export { useEngineData } from '../../state/EngineData'; // <--- ADD THIS IF YOU WANT TO RE-EXPORT
-    // Also, if EngineDataProps is used here, ensure it's imported or defined.
-
-    // This line uses useEngineData, which is *not* exported from LlamaLocal.ts currently.
-    // If ModelSettings.tsx accesses it as LlamaModule.useEngineData, it needs to be exported.
-    // For now, I'm assuming useEngineData is imported *directly* into ModelSettings.tsx
-    // as per the previous solution. If not, this needs re-export from LlamaLocal.
+    // This is now correctly imported from lib/state/EngineData.ts
     useEngineData.getState().setLastModelLoaded(loadedModel!)
     KV.useKVState.getState().setKvCacheLoaded(false)
 
@@ -257,16 +238,14 @@ export const useLlama = create<LlamaState>()((set, get) => ({ // EXPORTED
   },
 }))
 
-// Export the LlamaContext type itself if it's used directly elsewhere as LlamaModule.LlamaContext
-export type { LlamaContext, CompletionTimings }; // EXPORTED
+export type { LlamaContext, CompletionTimings };
 
-// These need to be exported if other files call them as LlamaModule.getEmbeddingLlamaContext etc.
-export async function getEmbeddingLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> { // EXPORTED
+export async function getEmbeddingLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> {
   if (embeddingLlamaContext && loadedEmbeddingLoRAPath === loraPath && loadedEmbeddingModel) {
     Logger.info('Embedding model and LoRA already loaded, returning existing context.')
     return embeddingLlamaContext
   }
-  const modelId = useEngineData.getState().embeddingModelId // Assuming this is where embeddingModelId is stored
+  const modelId = useEngineData.getState().embeddingModelId // This now works
   if (!modelId) {
     Logger.errorToast('No embedding model selected.')
     return null
@@ -281,12 +260,12 @@ export async function getEmbeddingLlamaContext(loraPath: string | null = null): 
   return embeddingLlamaContext
 }
 
-export async function getRagReasoningLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> { // EXPORTED
+export async function getRagReasoningLlamaContext(loraPath: string | null = null): Promise<LlamaContext | null> {
   if (ragReasoningLlamaContext && loadedRagReasoningLoRAPath === loraPath && loadedRagReasoningModel) {
     Logger.info('RAG Reasoning model and LoRA already loaded, returning existing context.')
     return ragReasoningLlamaContext
   }
-  const modelId = useEngineData.getState().ragReasoningModelId // Assuming this is where ragReasoningModelId is stored
+  const modelId = useEngineData.getState().ragReasoningModelId // This now works
   if (!modelId) {
     Logger.errorToast('No RAG Reasoning model selected.')
     return null
@@ -301,7 +280,7 @@ export async function getRagReasoningLlamaContext(loraPath: string | null = null
   return ragReasoningLlamaContext
 }
 
-export async function unloadEmbeddingLlamaContext(): Promise<void> { // EXPORTED
+export async function unloadEmbeddingLlamaContext(): Promise<void> {
   if (embeddingLlamaContext) {
     await embeddingLlamaContext.release()
     embeddingLlamaContext = null
@@ -312,7 +291,7 @@ export async function unloadEmbeddingLlamaContext(): Promise<void> { // EXPORTED
   }
 }
 
-export async function unloadRagReasoningLlamaContext(): Promise<void> { // EXPORTED
+export async function unloadRagReasoningLlamaContext(): Promise<void> {
   if (ragReasoningLlamaContext) {
     await ragReasoningLlamaContext.release()
     ragReasoningLlamaContext = null
@@ -323,9 +302,9 @@ export async function unloadRagReasoningLlamaContext(): Promise<void> { // EXPOR
   }
 }
 
-// Assuming useEngineData comes from here:
-import { useEngineData } from '../../state/EngineData'; // Assuming this path, adjust if needed
-export { useEngineData }; // Re-export useEngineData if other files want to access it via LlamaModule.
+// REMOVE THESE LINES FROM LlamaLocal.ts
+// import { useEngineData } from '../../state/EngineData'; // Assuming this path, adjust if needed
+// export { useEngineData }; // Re-export useEngineData if other files want to access it via LlamaModule.
 
 async function loadModelContext(
   modelId: number,
@@ -335,10 +314,9 @@ async function loadModelContext(
   isEmbeddingModel = false,
   loraPath: string | null = null
 ): Promise<{ context: LlamaContext | null; model: ModelDataType | null }> {
-  // ... (rest of loadModelContext function, no changes needed)
-  const config = useEngineData.getState().config // This uses useEngineData internally
+  const config = useEngineData.getState().config // This now works
   // ...
-  const llamaContext = await initLlama(params).catch((error: any) => { // Type 'error' as any
+  const llamaContext = await initLlama(params).catch((error: any) => {
     Logger.errorToast(`Could Not Load ${expectedType} Model: ${error.message}`)
     return null
   })

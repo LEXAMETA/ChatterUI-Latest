@@ -97,12 +97,19 @@ const FormattingManager = () => {
                     onPress: async () => {
                         if (!instructID) return
                         const leftover = data.filter((item) => item.id !== instructID)
+                        // Fix for TS2532: Object is possibly 'undefined'.
+                        // Ensure 'leftover' has at least one element before trying to access 'leftover[0].id'
                         if (leftover.length === 0) {
                             Logger.warnToast('Cannot delete last instruct')
                             return
                         }
                         Instructs.db.mutate.deleteInstruct(instructID)
-                        loadInstruct(leftover[0].id)
+                        if (leftover[0]) { // Explicitly check leftover[0]
+                            loadInstruct(leftover[0].id)
+                        } else {
+                            Logger.error('No leftover instruct found after deletion to load next.');
+                            // Consider a sensible fallback here, like loading a default or navigating away
+                        }
                     },
                     type: 'warning',
                 },
@@ -156,365 +163,382 @@ const FormattingManager = () => {
 
     useAutosave({ data: currentInstruct, onSave: () => handleSaveInstruct(false), interval: 3000 })
 
-    if (currentInstruct)
+    // Fix for TS7030: Not all code paths return a value.
+    // Add a return statement for when currentInstruct is null or undefined.
+    if (!currentInstruct) {
         return (
-            <FadeDownView style={{ flex: 1 }}>
-                <SafeAreaView
-                    style={{
-                        marginVertical: spacing.xl,
-                        flex: 1,
-                    }}>
-                    <HeaderTitle title="Formatting" />
-                    <HeaderButton headerRight={headerRight} />
-                    <View>
-                        <TextBoxModal
-                            booleans={[showNewInstruct, setShowNewInstruct]}
-                            onConfirm={(text) => {
-                                if (instructList.some((item) => item.name === text)) {
-                                    Logger.warnToast(`Config name already exists.`)
-                                    return
-                                }
-                                if (!currentInstruct) return
+            <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color.neutral._100 }}>
+                <Text style={{ color: color.text._900 }}>Loading formatting options...</Text>
+            </SafeAreaView>
+        );
+    }
+    
+    // If currentInstruct is defined, proceed with rendering the main component
+    return (
+        <FadeDownView style={{ flex: 1 }}>
+            <SafeAreaView
+                style={{
+                    marginVertical: spacing.xl,
+                    flex: 1,
+                }}>
+                <HeaderTitle title="Formatting" />
+                <HeaderButton headerRight={headerRight} />
+                <View>
+                    <TextBoxModal
+                        booleans={[showNewInstruct, setShowNewInstruct]}
+                        onConfirm={(text) => {
+                            if (instructList.some((item) => item.name === text)) {
+                                Logger.warnToast(`Config name already exists.`)
+                                return
+                            }
+                            if (!currentInstruct) return // This check is good, but the outer `if` handles main flow
 
-                                Instructs.db.mutate
-                                    .createInstruct({ ...currentInstruct, name: text })
-                                    .then(async (newid) => {
-                                        Logger.infoToast(`Config created.`)
-                                        await loadInstruct(newid)
-                                    })
-                            }}
-                        />
-                    </View>
-
-                    <View
-                        style={{
-                            paddingHorizontal: spacing.xl,
-                            marginTop: spacing.xl,
-                            paddingBottom: spacing.l,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                        }}>
-                        <DropdownSheet
-                            containerStyle={{ flex: 1 }}
-                            selected={selectedItem}
-                            data={instructList}
-                            labelExtractor={(item) => item.name}
-                            onChangeValue={(item) => {
-                                if (item.id === instructID) return
-                                loadInstruct(item.id)
-                            }}
-                            modalTitle="Select Config"
-                            search
-                        />
-                        <ThemedButton iconName="save" iconSize={28} variant="tertiary" />
-                    </View>
-
-                    <ScrollView
-                        showsVerticalScrollIndicator={false}
-                        style={{
-                            flex: 1,
-                            marginTop: 16,
+                            Instructs.db.mutate
+                                .createInstruct({ ...currentInstruct, name: text })
+                                .then(async (newid) => {
+                                    Logger.infoToast(`Config created.`)
+                                    await loadInstruct(newid)
+                                })
                         }}
-                        contentContainerStyle={{
-                            rowGap: spacing.xl,
-                            paddingHorizontal: spacing.xl,
-                        }}>
-                        <SectionTitle>Instruct Formatting</SectionTitle>
+                    />
+                </View>
+
+                <View
+                    style={{
+                        paddingHorizontal: spacing.xl,
+                        marginTop: spacing.xl,
+                        paddingBottom: spacing.l,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                    }}>
+                    <DropdownSheet
+                        containerStyle={{ flex: 1 }}
+                        selected={selectedItem}
+                        data={instructList}
+                        labelExtractor={(item) => item.name}
+                        onChangeValue={(item) => {
+                            if (item.id === instructID) return
+                            loadInstruct(item.id)
+                        }}
+                        modalTitle="Select Config"
+                        search
+                    />
+                    <ThemedButton iconName="save" iconSize={28} variant="tertiary" />
+                </View>
+
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={{
+                        flex: 1,
+                        marginTop: 16,
+                    }}
+                    contentContainerStyle={{
+                        rowGap: spacing.xl,
+                        paddingHorizontal: spacing.xl,
+                    }}>
+                    <SectionTitle>Instruct Formatting</SectionTitle>
+                    <ThemedTextInput
+                        label="System Sequence"
+                        value={currentInstruct.system_prompt}
+                        onChangeText={(text) => {
+                            setCurrentInstruct({
+                                ...currentInstruct,
+                                system_prompt: text,
+                            })
+                        }}
+                        numberOfLines={5}
+                        multiline
+                    />
+                    <View style={{ flexDirection: 'row', columnGap: spacing.m }}>
                         <ThemedTextInput
-                            label="System Sequence"
-                            value={currentInstruct.system_prompt}
+                            label="System Prefix"
+                            value={currentInstruct.system_prefix}
                             onChangeText={(text) => {
                                 setCurrentInstruct({
                                     ...currentInstruct,
-                                    system_prompt: text,
+                                    system_prefix: text,
                                 })
                             }}
                             numberOfLines={5}
                             multiline
                         />
-                        <View style={{ flexDirection: 'row', columnGap: spacing.m }}>
-                            <ThemedTextInput
-                                label="System Prefix"
-                                value={currentInstruct.system_prefix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        system_prefix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                            <ThemedTextInput
-                                label="System Suffix"
-                                value={currentInstruct.system_suffix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        system_suffix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                        </View>
-                        <View style={{ flexDirection: 'row', columnGap: spacing.m }}>
-                            <ThemedTextInput
-                                label="Input Prefix"
-                                value={currentInstruct.input_prefix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        input_prefix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                            <ThemedTextInput
-                                label="Input Suffix"
-                                value={currentInstruct.input_suffix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        input_suffix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                        </View>
-                        <View style={{ flexDirection: 'row', columnGap: spacing.m }}>
-                            <ThemedTextInput
-                                label="Output Prefix"
-                                value={currentInstruct.output_prefix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        output_prefix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                            <ThemedTextInput
-                                label="Output Suffix"
-                                value={currentInstruct.output_suffix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        output_suffix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                        </View>
-
-                        <View style={{ flexDirection: 'row' }}>
-                            <ThemedTextInput
-                                label="Last Output Prefix"
-                                value={currentInstruct.last_output_prefix}
-                                onChangeText={(text) => {
-                                    setCurrentInstruct({
-                                        ...currentInstruct,
-                                        last_output_prefix: text,
-                                    })
-                                }}
-                                numberOfLines={5}
-                                multiline
-                            />
-                        </View>
-
-                        <StringArrayEditor
-                            containerStyle={{ marginBottom: spacing.l }}
-                            label="Stop Sequence"
-                            value={
-                                currentInstruct.stop_sequence
-                                    ? currentInstruct.stop_sequence.split(',')
-                                    : []
-                            }
-                            setValue={(data) => {
+                        <ThemedTextInput
+                            label="System Suffix"
+                            value={currentInstruct.system_suffix}
+                            onChangeText={(text) => {
                                 setCurrentInstruct({
                                     ...currentInstruct,
-                                    stop_sequence: data.join(','),
+                                    system_suffix: text,
                                 })
                             }}
-                            replaceNewLine="\n"
+                            numberOfLines={5}
+                            multiline
                         />
+                    </View>
+                    <View style={{ flexDirection: 'row', columnGap: spacing.m }}>
+                        <ThemedTextInput
+                            label="Input Prefix"
+                            value={currentInstruct.input_prefix}
+                            onChangeText={(text) => {
+                                setCurrentInstruct({
+                                    ...currentInstruct,
+                                    input_prefix: text,
+                                })
+                            }}
+                            numberOfLines={5}
+                            multiline
+                        />
+                        <ThemedTextInput
+                            label="Input Suffix"
+                            value={currentInstruct.input_suffix}
+                            onChangeText={(text) => {
+                                setCurrentInstruct({
+                                    ...currentInstruct,
+                                    input_suffix: text,
+                                })
+                            }}
+                            numberOfLines={5}
+                            multiline
+                        />
+                    </View>
+                    <View style={{ flexDirection: 'row', columnGap: spacing.m }}>
+                        <ThemedTextInput
+                            label="Output Prefix"
+                            value={currentInstruct.output_prefix}
+                            onChangeText={(text) => {
+                                setCurrentInstruct({
+                                    ...currentInstruct,
+                                    output_prefix: text,
+                                })
+                            }}
+                            numberOfLines={5}
+                            multiline
+                        />
+                        <ThemedTextInput
+                            label="Output Suffix"
+                            value={currentInstruct.output_suffix}
+                            onChangeText={(text) => {
+                                setCurrentInstruct({
+                                    ...currentInstruct,
+                                    output_suffix: text,
+                                })
+                            }}
+                            numberOfLines={5}
+                            multiline
+                        />
+                    </View>
 
-                        <SectionTitle>Macros & Character Card</SectionTitle>
+                    <View style={{ flexDirection: 'row' }}>
+                        <ThemedTextInput
+                            label="Last Output Prefix"
+                            value={currentInstruct.last_output_prefix}
+                            onChangeText={(text) => {
+                                setCurrentInstruct({
+                                    ...currentInstruct,
+                                    last_output_prefix: text,
+                                })
+                            }}
+                            numberOfLines={5}
+                            multiline
+                        />
+                    </View>
 
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                columnGap: spacing.xl,
-                                justifyContent: 'space-around',
-                            }}>
-                            <View>
-                                <ThemedCheckbox
-                                    label="Wrap In Newline"
-                                    value={currentInstruct.wrap}
-                                    onChangeValue={(b) => {
-                                        setCurrentInstruct({
-                                            ...currentInstruct,
-                                            wrap: b,
-                                        })
-                                    }}
-                                />
-                                <ThemedCheckbox
-                                    label="Include Names"
-                                    value={currentInstruct.names}
-                                    onChangeValue={(b) => {
-                                        setCurrentInstruct({
-                                            ...currentInstruct,
-                                            names: b,
-                                        })
-                                    }}
-                                />
-                                <ThemedCheckbox
-                                    label="Add Timestamp"
-                                    value={currentInstruct.timestamp}
-                                    onChangeValue={(b) => {
-                                        setCurrentInstruct({
-                                            ...currentInstruct,
-                                            timestamp: b,
-                                        })
-                                    }}
-                                />
-                            </View>
-                            <View>
-                                <ThemedCheckbox
-                                    label="Use Examples"
-                                    value={currentInstruct.examples}
-                                    onChangeValue={(b) => {
-                                        setCurrentInstruct({
-                                            ...currentInstruct,
-                                            examples: b,
-                                        })
-                                    }}
-                                />
-                                <ThemedCheckbox
-                                    label="Use Scenario"
-                                    value={currentInstruct.scenario}
-                                    onChangeValue={(b) => {
-                                        setCurrentInstruct({
-                                            ...currentInstruct,
-                                            scenario: b,
-                                        })
-                                    }}
-                                />
+                    <StringArrayEditor
+                        containerStyle={{ marginBottom: spacing.l }}
+                        label="Stop Sequence"
+                        value={
+                            currentInstruct.stop_sequence
+                                ? currentInstruct.stop_sequence.split(',')
+                                : []
+                        }
+                        setValue={(data) => {
+                            setCurrentInstruct({
+                                ...currentInstruct,
+                                stop_sequence: data.join(','),
+                            })
+                        }}
+                        replaceNewLine="\n"
+                    />
 
-                                <ThemedCheckbox
-                                    label="Use Personality"
-                                    value={currentInstruct.personality}
-                                    onChangeValue={(b) => {
-                                        setCurrentInstruct({
-                                            ...currentInstruct,
-                                            personality: b,
-                                        })
-                                    }}
-                                />
-                            </View>
+                    <SectionTitle>Macros & Character Card</SectionTitle>
+
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            columnGap: spacing.xl,
+                            justifyContent: 'space-around',
+                        }}>
+                        <View>
+                            <ThemedCheckbox
+                                label="Wrap In Newline"
+                                value={currentInstruct.wrap}
+                                onChangeValue={(b) => {
+                                    setCurrentInstruct({
+                                        ...currentInstruct,
+                                        wrap: b,
+                                    })
+                                }}
+                            />
+                            <ThemedCheckbox
+                                label="Include Names"
+                                value={currentInstruct.names}
+                                onChangeValue={(b) => {
+                                    setCurrentInstruct({
+                                        ...currentInstruct,
+                                        names: b,
+                                    })
+                                }}
+                            />
+                            <ThemedCheckbox
+                                label="Add Timestamp"
+                                value={currentInstruct.timestamp}
+                                onChangeValue={(b) => {
+                                    setCurrentInstruct({
+                                        ...currentInstruct,
+                                        timestamp: b,
+                                    })
+                                }}
+                            />
                         </View>
+                        <View>
+                            <ThemedCheckbox
+                                label="Use Examples"
+                                value={currentInstruct.examples}
+                                onChangeValue={(b) => {
+                                    setCurrentInstruct({
+                                        ...currentInstruct,
+                                        examples: b,
+                                    })
+                                }}
+                            />
+                            <ThemedCheckbox
+                                label="Use Scenario"
+                                value={currentInstruct.scenario}
+                                onChangeValue={(b) => {
+                                    setCurrentInstruct({
+                                        ...currentInstruct,
+                                        scenario: b,
+                                    })
+                                }}
+                            />
 
-                        <View style={{ rowGap: 8 }}>
-                            <SectionTitle>Text Formatter</SectionTitle>
-                            <Text
-                                style={{
-                                    color: color.text._400,
-                                }}>
-                                Automatically formats first message to the style below:
-                            </Text>
-                            <View
-                                style={{
-                                    backgroundColor: color.neutral._300,
-                                    marginTop: spacing.m,
-                                    paddingHorizontal: spacing.xl2,
-                                    alignItems: 'center',
-                                    borderRadius: borderRadius.m,
-                                }}>
-                                <Markdown
-                                    markdownit={MarkdownStyle.Rules}
-                                    rules={MarkdownStyle.RenderRules}
-                                    style={markdownStyle}>
-                                    {autoformatterData[currentInstruct.format_type].example}
-                                </Markdown>
-                            </View>
-                            <View>
-                                {autoformatterData.map((item, index) => (
-                                    <ThemedCheckbox
-                                        key={item.label}
-                                        label={item.label}
-                                        value={currentInstruct.format_type === index}
-                                        onChangeValue={(b) => {
-                                            if (b)
-                                                setCurrentInstruct({
-                                                    ...currentInstruct,
-                                                    format_type: index,
-                                                })
-                                        }}
-                                    />
-                                ))}
-                            </View>
+                            <ThemedCheckbox
+                                label="Use Personality"
+                                value={currentInstruct.personality}
+                                onChangeValue={(b) => {
+                                    setCurrentInstruct({
+                                        ...currentInstruct,
+                                        personality: b,
+                                    })
+                                }}
+                            />
                         </View>
+                    </View>
 
-                        <SectionTitle>Hidden Text</SectionTitle>
+                    <View style={{ rowGap: 8 }}>
+                        <SectionTitle>Text Formatter</SectionTitle>
                         <Text
                             style={{
                                 color: color.text._400,
                             }}>
-                            Hides text that matches regex patterns defined below. (case insensitive)
+                            Automatically formats first message to the style below:
                         </Text>
+                        <View
+                            style={{
+                                backgroundColor: color.neutral._300,
+                                marginTop: spacing.m,
+                                paddingHorizontal: spacing.xl2,
+                                alignItems: 'center',
+                                borderRadius: borderRadius.m,
+                            }}>
+                            <Markdown
+                                markdownit={MarkdownStyle.Rules}
+                                rules={MarkdownStyle.RenderRules}
+                                style={markdownStyle}>
+                                {/* Fix for TS2532: Object is possibly 'undefined'. */}
+                                {/* Use optional chaining for safer access */}
+                                {currentInstruct.format_type !== undefined && // Ensures format_type is not undefined
+                                currentInstruct.format_type >= 0 && // Ensures index is non-negative
+                                currentInstruct.format_type < autoformatterData.length // Ensures index is within bounds
+                                    ? autoformatterData[currentInstruct.format_type]?.example // Use optional chaining here
+                                    : '*<No Example Available>*' // Fallback text
+                                }
+                            </Markdown>
+                        </View>
+                        <View>
+                            {autoformatterData.map((item, index) => (
+                                <ThemedCheckbox
+                                    key={item.label}
+                                    label={item.label}
+                                    value={currentInstruct.format_type === index}
+                                    onChangeValue={(b) => {
+                                        if (b)
+                                            setCurrentInstruct({
+                                                ...currentInstruct,
+                                                format_type: index,
+                                            })
+                                    }}
+                                />
+                            ))}
+                        </View>
+                    </View>
 
-                        <StringArrayEditor value={textFilter} setValue={setTextFilter} />
+                    <SectionTitle>Hidden Text</SectionTitle>
+                    <Text
+                        style={{
+                            color: color.text._400,
+                        }}>
+                        Hides text that matches regex patterns defined below. (case insensitive)
+                    </Text>
 
-                        <SectionTitle>Local Template</SectionTitle>
+                    <StringArrayEditor value={textFilter} setValue={setTextFilter} />
 
-                        <ThemedSwitch
-                            label="Use Built-In Local Model Template"
-                            description="When in Local Mode, ChatterUI automatically uses the instruct template provided by the loaded model. Disable this if you want messages to be formatted using Instruct instead. System Prompt however is always used."
-                            value={useTemplate}
-                            onChangeValue={setUseTemplate}
+                    <SectionTitle>Local Template</SectionTitle>
+
+                    <ThemedSwitch
+                        label="Use Built-In Local Model Template"
+                        description="When in Local Mode, ChatterUI automatically uses the instruct template provided by the loaded model. Disable this if you want messages to be formatted using Instruct instead. System Prompt however is always used."
+                        value={useTemplate}
+                        onChangeValue={setUseTemplate}
+                    />
+
+                    {/* @TODO: Macros are always replaced - people may want this to be changed
+                        <CheckboxTitle
+                            name="Replace Macro In Sequences"
+                            varname="macro"
+                            body={currentInstruct}
+                            setValue={setCurrentInstruct}
                         />
+                        */}
 
-                        {/* @TODO: Macros are always replaced - people may want this to be changed
-                            <CheckboxTitle
-                                name="Replace Macro In Sequences"
-                                varname="macro"
-                                body={currentInstruct}
-                                setValue={setCurrentInstruct}
-                            />
-                            */}
-
-                        {/*  Groups are not implemented - leftover from ST
-                            <CheckboxTitle
-                                name="Force for Groups and Personas"
-                                varname="names_force_groups"
-                                body={currentInstruct}
-                                setValue={setCurrentInstruct}
-                            />
-                            */}
-                        {/* Activates Instruct when model is loaded with specific name that matches regex
-                    
-                            <TextBox
-                                name="Activation Regex"
-                                varname="activation_regex"
-                                body={currentInstruct}
-                                setValue={setCurrentInstruct}
-                            />*/}
-                        {/*    User Alignment Messages may be needed in future, might be removed on CCv3
-                            <TextBox
-                                name="User Alignment"
-                                varname="user_alignment_message"
-                                body={currentInstruct}
-                                setValue={setCurrentInstruct}
-                                multiline
-                            />*/}
-                    </ScrollView>
-                </SafeAreaView>
-            </FadeDownView>
-        )
+                    {/* Groups are not implemented - leftover from ST
+                        <CheckboxTitle
+                            name="Force for Groups and Personas"
+                            varname="names_force_groups"
+                            body={currentInstruct}
+                            setValue={setCurrentInstruct}
+                        />
+                        */}
+                    {/* Activates Instruct when model is loaded with specific name that matches regex
+                
+                        <TextBox
+                            name="Activation Regex"
+                            varname="activation_regex"
+                            body={currentInstruct}
+                            setValue={setCurrentInstruct}
+                        />*/}
+                    {/* User Alignment Messages may be needed in future, might be removed on CCv3
+                        <TextBox
+                            name="User Alignment"
+                            varname="user_alignment_message"
+                            body={currentInstruct}
+                            setValue={setCurrentInstruct}
+                            multiline
+                        />*/}
+                </ScrollView>
+            </SafeAreaView>
+        </FadeDownView>
+    )
 }
 
 export default FormattingManager

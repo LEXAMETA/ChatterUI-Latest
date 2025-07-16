@@ -1,7 +1,7 @@
 import { AntDesign } from '@expo/vector-icons'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useFocusEffect } from 'expo-router'
-import React, { ReactNode, useRef, useState } from 'react'
+import React, { ReactNode, useRef, useState, useImperativeHandle } from 'react' // Import useImperativeHandle
 import { StyleSheet, TouchableOpacity, Text, BackHandler, TextStyle } from 'react-native'
 import {
     Menu,
@@ -11,21 +11,28 @@ import {
     MenuTrigger,
     renderers,
 } from 'react-native-popup-menu'
+import type { Menu as MenuType } from 'react-native-popup-menu'; // Import Menu type for ref
 
 const { Popover } = renderers
 
-// Updated MenuRef to explicitly include close() and isOpen() methods
-export type MenuRef = React.MutableRefObject<{
-    close: () => void
-    isOpen: () => boolean
-} | null>
+// Define the type for the ref that *this* PopupMenu component exposes
+export type PopupMenuHandle = {
+    close: () => void;
+    isOpen: () => boolean;
+};
+
+// No longer need MenuRef as a separate export, it's replaced by PopupMenuHandle
+// export type MenuRef = React.MutableRefObject<{
+//     close: () => void
+//     isOpen: () => boolean
+// } | null>
 
 type PopupOptionProps = {
     label: string
-    icon?: keyof typeof AntDesign.glyphMap // Made icon optional
-    onPress: (m: MenuRef) => void | Promise<void>
+    icon?: keyof typeof AntDesign.glyphMap
+    onPress: (m: React.RefObject<PopupMenuHandle>) => void | Promise<void> // Changed type to PopupMenuHandle
     warning?: boolean
-    menuRef: MenuRef
+    menuRef: React.RefObject<PopupMenuHandle> // Changed type to PopupMenuHandle
 }
 
 type MenuOptionProp = Omit<PopupOptionProps, 'menuRef'>
@@ -44,19 +51,19 @@ const PopupOption: React.FC<PopupOptionProps> = ({
     onPress,
     label,
     icon,
-    menuRef,
+    menuRef, // This `menuRef` will now correctly be the `PopupMenuHandle` ref
     warning = false,
 }) => {
     const styles = useStyles()
     const { color } = Theme.useTheme()
     const handleOnPress = async () => {
-        await onPress(menuRef)
+        await onPress(menuRef) // Pass the forwarded ref
     }
 
     return (
         <MenuOption>
             <TouchableOpacity style={styles.popupButton} onPress={handleOnPress}>
-                {icon && ( // Only render icon if it exists
+                {icon && (
                     <AntDesign
                         style={{ minWidth: 20 }}
                         name={icon}
@@ -72,67 +79,84 @@ const PopupOption: React.FC<PopupOptionProps> = ({
     )
 }
 
-const PopupMenu: React.FC<PopupMenuProps> = ({
-    disabled,
-    icon,
-    iconSize = 26,
-    style = {},
-    options,
-    children,
-    placement = 'left',
-}) => {
-    const styles = useStyles()
-    const { color } = Theme.useTheme()
-    const menuStyle = useMenuStyle()
-    const [showMenu, setShowMenu] = useState<boolean>(false)
-    const menuRef: MenuRef = useRef(null)
+// Use React.forwardRef to accept a ref from parent components
+const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
+    ({
+        disabled,
+        icon,
+        iconSize = 26,
+        style = {},
+        options,
+        children,
+        placement = 'left',
+    }, ref) => { // 'ref' is the forwarded ref from the parent
+        const styles = useStyles()
+        const { color } = Theme.useTheme()
+        const menuStyle = useMenuStyle()
+        const [showMenu, setShowMenu] = useState<boolean>(false)
 
-    // Back handler to close menu on hardware back press
-    const backAction = () => {
-        if (!menuRef.current || !menuRef.current.isOpen()) return false
-        menuRef.current.close()
-        return true
+        // Internal ref for the react-native-popup-menu Menu component
+        const internalMenuRef = useRef<MenuType>(null); // Use MenuType from the library
+
+        // Use useImperativeHandle to expose custom methods to the parent ref
+        useImperativeHandle(ref, () => ({
+            close: () => {
+                internalMenuRef.current?.close();
+            },
+            isOpen: () => {
+                return internalMenuRef.current?.isOpen() ?? false; // Default to false if not open
+            },
+        }));
+
+        // Back handler to close menu on hardware back press
+        const backAction = () => {
+            if (!internalMenuRef.current || !internalMenuRef.current.isOpen()) return false
+            internalMenuRef.current.close()
+            return true
+        }
+
+        useFocusEffect(() => {
+            // Ensure no duplicate listeners when component re-focuses quickly
+            BackHandler.removeEventListener('hardwareBackPress', backAction)
+            const handler = BackHandler.addEventListener('hardwareBackPress', backAction)
+            return () => handler.remove()
+        })
+
+        return (
+            <Menu
+                ref={internalMenuRef} // Assign the internal ref to the Menu component
+                onOpen={() => setShowMenu(true)}
+                onClose={() => setShowMenu(false)}
+                renderer={Popover}
+                rendererProps={{
+                    placement: placement,
+                    anchorStyle: styles.anchor,
+                    openAnimationDuration: 150,
+                    closeAnimationDuration: 0,
+                }}>
+                <MenuTrigger disabled={disabled}>
+                    {icon && (
+                        <AntDesign
+                            style={style}
+                            color={showMenu ? color.text._500 : color.text._300}
+                            name={icon}
+                            size={iconSize}
+                        />
+                    )}
+                    {children}
+                </MenuTrigger>
+                <MenuOptions customStyles={menuStyle}>
+                    {options.map((item) => (
+                        // Pass the forwarded ref down to PopupOption
+                        <PopupOption {...item} key={item.label} menuRef={ref as React.RefObject<PopupMenuHandle>} icon={item.icon} />
+                    ))}
+                </MenuOptions>
+            </Menu>
+        )
     }
+);
 
-    useFocusEffect(() => {
-        BackHandler.removeEventListener('hardwareBackPress', backAction)
-        const handler = BackHandler.addEventListener('hardwareBackPress', backAction)
-        return () => handler.remove()
-    })
-
-    return (
-        <Menu
-            ref={menuRef}
-            onOpen={() => setShowMenu(true)}
-            onClose={() => setShowMenu(false)}
-            renderer={Popover}
-            rendererProps={{
-                placement: placement,
-                anchorStyle: styles.anchor,
-                openAnimationDuration: 150,
-                closeAnimationDuration: 0,
-            }}>
-            <MenuTrigger disabled={disabled}>
-                {icon && (
-                    <AntDesign
-                        style={style}
-                        color={showMenu ? color.text._500 : color.text._300}
-                        name={icon}
-                        size={iconSize}
-                    />
-                )}
-                {children}
-            </MenuTrigger>
-            <MenuOptions customStyles={menuStyle}>
-                {options.map((item) => (
-                    <PopupOption {...item} key={item.label} menuRef={menuRef} icon={item.icon} />
-                ))}
-            </MenuOptions>
-        </Menu>
-    )
-}
-
-export default PopupMenu
+export default PopupMenu;
 
 const useMenuStyle = (): MenuOptionsCustomStyle => {
     const { color, spacing, borderRadius } = Theme.useTheme()
