@@ -2,7 +2,7 @@ import ThemedButton from '@components/buttons/ThemedButton'
 import Alert from '@components/views/Alert'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // imported PopupMenuHandle
 import { DefaultColorSchemes, ThemeColor } from '@lib/theme/ThemeColor'
 import { Theme } from '@lib/theme/ThemeManager'
 import { pickJSONDocument } from '@lib/utils/File'
@@ -29,7 +29,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
     const handleRemoveColorScheme = (index: number) => {
         Alert.alert({
             title: 'Delete Theme',
-            description: `Are you sure you want to delete ${customColors[0].name}? This cannot be undone!`,
+            description: `Are you sure you want to delete ${customColors[index]?.name ?? 'this theme'}? This cannot be undone!`, // Safe access
             buttons: [
                 { label: 'Cancel' },
                 {
@@ -140,12 +140,12 @@ const ColorSelector = () => {
                             {
                                 label: 'Import Theme',
                                 icon: 'download',
-                                onPress: (m) => {
+                                onPress: (m: PopupMenuHandle) => {
                                     pickJSONDocument().then((result) => {
                                         if (!result.success) return
                                         addCustomColor(result.data)
                                     })
-                                    m?.current?.close()
+                                    m.close() // Changed from m?.current?.close()
                                 },
                             },
                         ]}
@@ -155,7 +155,7 @@ const ColorSelector = () => {
             <FlatList
                 contentContainerStyle={{ rowGap: 8 }}
                 data={[...DefaultColorSchemes.schemes, ...customColors]}
-                keyExtractor={(item, index) => item.name}
+                keyExtractor={(item) => item.name}
                 renderItem={({ item, index }) => (
                     <ColorThemeItem
                         item={item}

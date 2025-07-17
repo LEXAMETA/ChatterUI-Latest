@@ -6,7 +6,7 @@ import Alert from '@components/views/Alert'
 import FadeDownView from '@components/views/FadeDownView'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // Import PopupMenuHandle type
 import TextBoxModal from '@components/views/TextBoxModal'
 import { Samplers } from '@lib/constants/SamplerData'
 import { APISampler } from '@lib/engine/API/APIBuilder.types'
@@ -45,10 +45,8 @@ const SamplerMenu = () => {
     const getSamplerList = (): APISampler[] => {
         if (appMode === 'local') return localSamplerData
         if (activeIndex !== -1) {
-            // TS2532: Object is possibly 'undefined'. (on apiValues[activeIndex])
-            // Added check for `apiValues[activeIndex]` before accessing `configName`.
             const currentApiConfig = apiValues[activeIndex]
-            if (!currentApiConfig) return [] // Guard against undefined config
+            if (!currentApiConfig) return []
 
             const template = getTemplates().find(
                 (item) => item.name === currentApiConfig.configName
@@ -60,8 +58,6 @@ const SamplerMenu = () => {
     }
 
     const handleExportSampler = () => {
-        // TS18048: 'currentConfig' is possibly 'undefined'.
-        // Added check for `currentConfig`
         if (!currentConfig) {
             Logger.errorToast('No sampler configuration to export.')
             return
@@ -81,8 +77,6 @@ const SamplerMenu = () => {
     }
 
     const handleDeleteSampler = () => {
-        // TS18048: 'currentConfig' is possibly 'undefined'.
-        // Added check for `currentConfig`
         if (!currentConfig) {
             Logger.errorToast(`No sampler configuration selected to delete.`)
             return false
@@ -94,8 +88,6 @@ const SamplerMenu = () => {
 
         Alert.alert({
             title: `Delete Sampler`,
-            // TS18048: 'currentConfig' is possibly 'undefined'.
-            // Used optional chaining and nullish coalescing for display text.
             description: `Are you sure you want to delete '${currentConfig?.name ?? 'this config'}'?`,
             buttons: [
                 { label: 'Cancel' },
@@ -120,32 +112,32 @@ const SamplerMenu = () => {
                 {
                     label: 'Create Sampler',
                     icon: 'addfile',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         setShowNewSampler(true)
-                        menu.current?.close()
+                        menu.close()
                     },
                 },
                 {
                     label: 'Export Sampler',
                     icon: 'download',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         handleExportSampler()
-                        menu.current?.close()
+                        menu.close()
                     },
                 },
                 /*{
                     label: 'Import Sampler',
                     icon: 'upload',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         handleImportSampler()
-                        menu.current?.close()
+                        menu.close()
                     },
                 },*/
                 {
                     label: 'Delete Sampler',
                     icon: 'delete',
-                    onPress: (menu) => {
-                        if (handleDeleteSampler()) menu.current?.close()
+                    onPress: (menu: PopupMenuHandle) => {
+                        if (handleDeleteSampler()) menu.close()
                     },
                     warning: true,
                 },
@@ -163,16 +155,12 @@ const SamplerMenu = () => {
                         return
                     }
 
-                    // TS18048: 'currentConfig' is possibly 'undefined'.
-                    // Added check for `currentConfig` before trying to use its `data`.
-                    // Also, ensure `item.name` is compared to `text` not `currentConfig.name`
                     for (const item of configList)
                         if (item.name === text) {
                             Logger.errorToast(`Sampler name already exists.`)
                             return
                         }
-                    // TS18048: 'currentConfig' is possibly 'undefined'.
-                    // Added check for `currentConfig`
+
                     if (currentConfig) {
                         addSamplerConfig({ name: text, data: currentConfig.data })
                     } else {
@@ -188,11 +176,9 @@ const SamplerMenu = () => {
 
             <DropdownSheet
                 containerStyle={{ marginHorizontal: spacing.xl, paddingVertical: spacing.m }}
-                selected={currentConfig} // `currentConfig` can be `undefined`, which `selected` prop should handle.
+                selected={currentConfig}
                 data={configList}
                 onChangeValue={(item) => {
-                    // TS18048: 'currentConfig' is possibly 'undefined'.
-                    // Added check for `currentConfig`
                     if (currentConfig && item.name === currentConfig.name) return
                     changeConfig(configList.indexOf(item))
                 }}
@@ -200,10 +186,9 @@ const SamplerMenu = () => {
             />
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                {/* TS18048: 'currentConfig' is possibly 'undefined'. */}
-                {currentConfig && // Render content only if currentConfig is defined
+                {currentConfig &&
                     getSamplerList().map((item, index) => {
-                        const samplerItem = Samplers?.[item.samplerID] // Optional chaining for Samplers
+                        const samplerItem = Samplers?.[item.samplerID]
                         if (!samplerItem)
                             return (
                                 <Text key={item.samplerID} style={styles.unsupported}>
@@ -217,11 +202,6 @@ const SamplerMenu = () => {
                                         samplerItem.values.type === 'integer') && (
                                         <ThemedSlider
                                             key={item.samplerID}
-                                            // TS2532: Object is possibly 'undefined'. (on currentConfig.data)
-                                            // currentConfig is guaranteed by the outer `currentConfig &&`
-                                            // But `currentConfig.data` might be implicitly `any` or `Record<string, any>`
-                                            // which makes indexing unsafe without assertion or type refinement.
-                                            // Added `as number` assertion, assuming it's correct from context.
                                             value={
                                                 currentConfig.data[samplerItem.internalID] as number
                                             }
@@ -245,8 +225,6 @@ const SamplerMenu = () => {
                             case 'checkbox':
                                 return (
                                     <ThemedCheckbox
-                                        // TS2532: Object is possibly 'undefined'. (on currentConfig.data)
-                                        // Added `as boolean` assertion.
                                         value={currentConfig.data[item.samplerID] as boolean}
                                         key={item.samplerID}
                                         onChangeValue={(b) => {
@@ -265,8 +243,6 @@ const SamplerMenu = () => {
                                 return (
                                     <ThemedTextInput
                                         key={item.samplerID}
-                                        // TS2532: Object is possibly 'undefined'. (on currentConfig.data)
-                                        // Added `as string` assertion.
                                         value={currentConfig.data[item.samplerID] as string}
                                         onChangeText={(text) => {
                                             updateCurrentConfig({
@@ -280,7 +256,6 @@ const SamplerMenu = () => {
                                         label={samplerItem.friendlyName}
                                     />
                                 )
-                            //case 'custom':
                             default:
                                 return (
                                     <Text key={item.samplerID} style={styles.warningText}>

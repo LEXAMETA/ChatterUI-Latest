@@ -4,7 +4,8 @@ import DropdownSheet from '@components/input/DropdownSheet'
 import MultiDropdownSheet from '@components/input/MultiDropdownSheet'
 import ThemedTextInput from '@components/input/ThemedTextInput'
 import { CLAUDE_VERSION } from '@lib/constants/GlobalValues'
-import { APIManagerValue, APIState, APIConfiguration } from '@lib/engine/API/APIManagerState' // Adjust import if needed
+import { APIManagerValue, APIState } from '@lib/engine/API/APIManagerState'
+import { APIConfiguration } from '@lib/engine/API/APIBuilder.types' // <--- NEW LINE
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 import { Stack, useRouter } from 'expo-router'

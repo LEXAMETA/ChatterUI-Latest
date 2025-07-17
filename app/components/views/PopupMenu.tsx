@@ -1,7 +1,7 @@
 import { AntDesign } from '@expo/vector-icons'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useFocusEffect } from 'expo-router'
-import React, { ReactNode, useRef, useState, useImperativeHandle } from 'react' // Import useImperativeHandle
+import React, { ReactNode, useRef, useState, useImperativeHandle } from 'react'
 import { StyleSheet, TouchableOpacity, Text, BackHandler, TextStyle } from 'react-native'
 import {
     Menu,
@@ -11,28 +11,22 @@ import {
     MenuTrigger,
     renderers,
 } from 'react-native-popup-menu'
-import type { Menu as MenuType } from 'react-native-popup-menu'; // Import Menu type for ref
+import type { Menu as MenuType } from 'react-native-popup-menu'
 
 const { Popover } = renderers
 
-// Define the type for the ref that *this* PopupMenu component exposes
+// Exported type for the ref handle exposed by PopupMenu
 export type PopupMenuHandle = {
-    close: () => void;
-    isOpen: () => boolean;
-};
-
-// No longer need MenuRef as a separate export, it's replaced by PopupMenuHandle
-// export type MenuRef = React.MutableRefObject<{
-//     close: () => void
-//     isOpen: () => boolean
-// } | null>
+    close: () => void
+    isOpen: () => boolean
+}
 
 type PopupOptionProps = {
     label: string
     icon?: keyof typeof AntDesign.glyphMap
-    onPress: (m: React.RefObject<PopupMenuHandle>) => void | Promise<void> // Changed type to PopupMenuHandle
+    onPress: (menuRef: PopupMenuHandle) => void | Promise<void>
     warning?: boolean
-    menuRef: React.RefObject<PopupMenuHandle> // Changed type to PopupMenuHandle
+    menuRef: React.RefObject<PopupMenuHandle>
 }
 
 type MenuOptionProp = Omit<PopupOptionProps, 'menuRef'>
@@ -51,13 +45,16 @@ const PopupOption: React.FC<PopupOptionProps> = ({
     onPress,
     label,
     icon,
-    menuRef, // This `menuRef` will now correctly be the `PopupMenuHandle` ref
+    menuRef,
     warning = false,
 }) => {
     const styles = useStyles()
     const { color } = Theme.useTheme()
+
     const handleOnPress = async () => {
-        await onPress(menuRef) // Pass the forwarded ref
+        if (menuRef.current) {
+            await onPress(menuRef.current)
+        }
     }
 
     return (
@@ -79,36 +76,36 @@ const PopupOption: React.FC<PopupOptionProps> = ({
     )
 }
 
-// Use React.forwardRef to accept a ref from parent components
 const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
-    ({
-        disabled,
-        icon,
-        iconSize = 26,
-        style = {},
-        options,
-        children,
-        placement = 'left',
-    }, ref) => { // 'ref' is the forwarded ref from the parent
+    (
+        {
+            disabled,
+            icon,
+            iconSize = 26,
+            style = {},
+            options,
+            children,
+            placement = 'left',
+        },
+        ref
+    ) => {
         const styles = useStyles()
         const { color } = Theme.useTheme()
         const menuStyle = useMenuStyle()
         const [showMenu, setShowMenu] = useState<boolean>(false)
+        const internalMenuRef = useRef<MenuType>(null)
 
-        // Internal ref for the react-native-popup-menu Menu component
-        const internalMenuRef = useRef<MenuType>(null); // Use MenuType from the library
-
-        // Use useImperativeHandle to expose custom methods to the parent ref
+        // Expose close and isOpen methods to parent via ref
         useImperativeHandle(ref, () => ({
             close: () => {
-                internalMenuRef.current?.close();
+                internalMenuRef.current?.close()
             },
             isOpen: () => {
-                return internalMenuRef.current?.isOpen() ?? false; // Default to false if not open
+                return internalMenuRef.current?.isOpen() ?? false
             },
-        }));
+        }))
 
-        // Back handler to close menu on hardware back press
+        // Handle hardware back button on Android to close menu
         const backAction = () => {
             if (!internalMenuRef.current || !internalMenuRef.current.isOpen()) return false
             internalMenuRef.current.close()
@@ -116,7 +113,6 @@ const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
         }
 
         useFocusEffect(() => {
-            // Ensure no duplicate listeners when component re-focuses quickly
             BackHandler.removeEventListener('hardwareBackPress', backAction)
             const handler = BackHandler.addEventListener('hardwareBackPress', backAction)
             return () => handler.remove()
@@ -124,12 +120,12 @@ const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
 
         return (
             <Menu
-                ref={internalMenuRef} // Assign the internal ref to the Menu component
+                ref={internalMenuRef}
                 onOpen={() => setShowMenu(true)}
                 onClose={() => setShowMenu(false)}
                 renderer={Popover}
                 rendererProps={{
-                    placement: placement,
+                    placement,
                     anchorStyle: styles.anchor,
                     openAnimationDuration: 150,
                     closeAnimationDuration: 0,
@@ -147,16 +143,20 @@ const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
                 </MenuTrigger>
                 <MenuOptions customStyles={menuStyle}>
                     {options.map((item) => (
-                        // Pass the forwarded ref down to PopupOption
-                        <PopupOption {...item} key={item.label} menuRef={ref as React.RefObject<PopupMenuHandle>} icon={item.icon} />
+                        <PopupOption
+                            {...item}
+                            key={item.label}
+                            menuRef={ref as React.RefObject<PopupMenuHandle>}
+                            icon={item.icon}
+                        />
                     ))}
                 </MenuOptions>
             </Menu>
         )
     }
-);
+)
 
-export default PopupMenu;
+export default PopupMenu
 
 const useMenuStyle = (): MenuOptionsCustomStyle => {
     const { color, spacing, borderRadius } = Theme.useTheme()
@@ -180,7 +180,6 @@ const useStyles = () => {
             backgroundColor: color.primary._300,
             padding: 4,
         },
-
         popupButton: {
             flexDirection: 'row',
             alignItems: 'center',
@@ -190,15 +189,9 @@ const useStyles = () => {
             paddingLeft: spacing.l,
             borderRadius: spacing.l,
         },
-
-        headerButtonContainer: {
-            flexDirection: 'row',
-        },
-
         optionLabel: {
             color: color.text._100,
         },
-
         optionLabelWarning: {
             fontWeight: '500',
             color: color.error._300,

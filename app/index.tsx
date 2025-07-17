@@ -27,15 +27,25 @@ const Home = () => {
   const [appReady, setAppReady] = useState(false)
 
   const [autoLoadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal)
-  // FIX 2: Corrected useLlama access and added type for 'state'
-  const { lastModel, currentChatModel, loadCurrentChatModel, setLoadProgress } = useLlama(
-    (state: LlamaState) => ({ // <--- Type 'state' here
-      lastModel: state.lastModel,
+
+  // --- FIX START ---
+  // Get currentChatModel, loadCurrentChatModel, setLoadProgress from useLlama
+  const { currentChatModel, loadCurrentChatModel, setLoadProgress } = useLlama(
+    (state: LlamaState) => ({
+      // lastModel is NOT on LlamaState, so remove it from here
       currentChatModel: state.currentChatModel,
       loadCurrentChatModel: state.loadCurrentChatModel,
       setLoadProgress: state.setLoadProgress,
     })
   )
+
+  // Get lastModelLoaded from useEngineData
+  const { lastModelLoaded } = useEngineData(
+    (state: EngineDataState) => ({
+      lastModelLoaded: state.lastModelLoaded, // <--- Correctly access from EngineDataState
+    })
+  );
+  // --- FIX END ---
 
   useEffect(() => {
     const initApp = async () => {
@@ -46,15 +56,16 @@ const Home = () => {
 
       startupApp()
 
-      if (autoLoadLocal && lastModel && !currentChatModel) {
+      // Use lastModelLoaded from useEngineData, and rename variable for consistency if desired
+      if (autoLoadLocal && lastModelLoaded && !currentChatModel) { // Use lastModelLoaded here
         Logger.info('Attempting to auto-load last used model...')
         setLoadProgress(0)
         try {
-          const loadSuccess = await loadCurrentChatModel(lastModel)
+          const loadSuccess = await loadCurrentChatModel(lastModelLoaded) // Pass lastModelLoaded here
           if (loadSuccess) {
-            Logger.infoToast(`Auto-loaded "${lastModel.name}".`)
+            Logger.infoToast(`Auto-loaded "${lastModelLoaded.name}".`)
           } else {
-            Logger.errorToast(`Failed to auto-load "${lastModel.name}".`)
+            Logger.errorToast(`Failed to auto-load "${lastModelLoaded.name}".`)
           }
         } catch (err: any) {
           Logger.errorToast(`Error during auto-load: ${err.message}`)
@@ -68,8 +79,9 @@ const Home = () => {
       SplashScreen.hideAsync()
     }
 
+    // Add lastModelLoaded to the dependency array of useEffect
     initApp()
-  }, [success, authorized, autoLoadLocal, lastModel, currentChatModel, loadCurrentChatModel, setLoadProgress])
+  }, [success, authorized, autoLoadLocal, lastModelLoaded, currentChatModel, loadCurrentChatModel, setLoadProgress])
 
   if (error)
     return (

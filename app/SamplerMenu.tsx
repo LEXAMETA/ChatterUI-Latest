@@ -6,7 +6,7 @@ import Alert from '@components/views/Alert'
 import FadeDownView from '@components/views/FadeDownView'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // import PopupMenuHandle here
 import TextBoxModal from '@components/views/TextBoxModal'
 import { Samplers } from '@lib/constants/SamplerData'
 import { APISampler } from '@lib/engine/API/APIBuilder.types'
@@ -113,34 +113,34 @@ const SamplerMenu = () => {
         {
           label: 'Create Sampler',
           icon: 'addfile',
-          onPress: (menu) => {
+          onPress: (menu: PopupMenuHandle) => {
             setShowNewSampler(true)
-            menu.current?.close()
+            menu.close()
           },
         },
         {
           label: 'Export Sampler',
           icon: 'download',
-          onPress: (menu) => {
+          onPress: (menu: PopupMenuHandle) => {
             handleExportSampler()
-            menu.current?.close()
+            menu.close()
           },
         },
         /*
         {
           label: 'Import Sampler',
           icon: 'upload',
-          onPress: (menu) => {
+          onPress: (menu: PopupMenuHandle) => {
             handleImportSampler()
-            menu.current?.close()
+            menu.close()
           },
         },
         */
         {
           label: 'Delete Sampler',
           icon: 'delete',
-          onPress: (menu) => {
-            if (handleDeleteSampler()) menu.current?.close()
+          onPress: (menu: PopupMenuHandle) => {
+            if (handleDeleteSampler()) menu.close()
           },
           warning: true,
         },

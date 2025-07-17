@@ -27,15 +27,11 @@ const ChatFrame: React.FC<ChatFrameProps> = ({ children, index, nowGenerating, i
 
     const swipe = message.swipes[message.swipe_id]
 
-    const getDeltaTime = () =>
-        Math.round(
-            Math.max(
-                0,
-                ((nowGenerating && isLast ? Date.now() : swipe.gen_finished.getTime()) -
-                    swipe.gen_started.getTime()) /
-                    1000
-            )
-        )
+    const getDeltaTime = () => {
+        if (!swipe || !swipe.gen_finished || !swipe.gen_started) return 0
+        const endTime = nowGenerating && isLast ? Date.now() : swipe.gen_finished.getTime()
+        return Math.round(Math.max(0, (endTime - swipe.gen_started.getTime()) / 1000))
+    }
     const deltaTime = getDeltaTime()
 
     return (
@@ -87,7 +83,8 @@ const ChatFrame: React.FC<ChatFrameProps> = ({ children, index, nowGenerating, i
                             {message.name}
                         </Text>
                         <Text style={{ fontSize: fontSize.s, color: color.text._400 }}>
-                            {swipe.gen_finished.toLocaleTimeString()}
+                            {/* Safely access swipe.gen_finished */}
+                            {swipe?.gen_finished?.toLocaleTimeString() ?? ''}
                         </Text>
                     </View>
                 </View>

@@ -86,21 +86,28 @@ const DatabaseSettings = () => {
                 label="Import Database"
                 variant="secondary"
                 onPress={async () => {
-                    getDocumentAsync({ type: ['application/*'] }).then(async (result) => {
-                        if (result.canceled) return
-                        Alert.alert({
-                            title: `Import Database`,
-                            description: `Are you sure you want to import this database? This may will destroy the current database!\n\nA backup will automatically be downloaded.\n\nApp will restart automatically`,
-                            buttons: [
-                                { label: 'Cancel' },
-                                {
-                                    label: 'Import',
-                                    onPress: () =>
-                                        importDB(result.assets[0].uri, result.assets[0].name),
-                                    type: 'warning',
-                                },
-                            ],
-                        })
+                    const result = await getDocumentAsync({ type: ['application/*'] })
+                    if (result.canceled) return
+                    if (!result.assets || result.assets.length === 0) {
+                        Logger.errorToast('No file selected.')
+                        return
+                    }
+                    const asset = result.assets[0]
+                    if (!asset.uri || !asset.name) {
+                        Logger.errorToast('Selected file is invalid.')
+                        return
+                    }
+                    Alert.alert({
+                        title: `Import Database`,
+                        description: `Are you sure you want to import this database? This may will destroy the current database!\n\nA backup will automatically be downloaded.\n\nApp will restart automatically`,
+                        buttons: [
+                            { label: 'Cancel' },
+                            {
+                                label: 'Import',
+                                onPress: () => importDB(asset.uri, asset.name),
+                                type: 'warning',
+                            },
+                        ],
                     })
                 }}
             />

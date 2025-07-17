@@ -1,5 +1,5 @@
 import Alert from '@components/views/Alert'
-import PopupMenu, { MenuRef } from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // updated import
 import { CharInfo, Characters } from '@lib/state/Characters'
 import { useRouter } from 'expo-router'
 
@@ -20,7 +20,7 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
         setCurrentCard: state.setCard,
     }))
 
-    const deleteCard = (menuRef: MenuRef) => {
+    const deleteCard = (menuRef: PopupMenuHandle) => { // updated type here
         Alert.alert({
             title: 'Delete Character',
             description: `Are you sure you want to delete '${characterInfo.name}'? This cannot be undone.`,
@@ -39,7 +39,7 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
         })
     }
 
-    const cloneCard = (menuRef: MenuRef) => {
+    const cloneCard = (menuRef: PopupMenuHandle) => { // updated type here
         Alert.alert({
             title: 'Clone Character',
             description: `Are you sure you want to clone '${characterInfo.name}'?`,
@@ -52,7 +52,7 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
                     onPress: async () => {
                         setNowLoading(true)
                         await Characters.db.mutate.duplicateCard(characterInfo.id)
-                        menuRef.current?.close()
+                        menuRef.close()
                         setNowLoading(false)
                     },
                 },
@@ -60,12 +60,12 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
         })
     }
 
-    const editCharacter = async (menuRef: MenuRef) => {
+    const editCharacter = async (menuRef: PopupMenuHandle) => { // updated type here
         if (nowLoading) return
         setNowLoading(true)
         await setCurrentCard(characterInfo.id)
         setNowLoading(false)
-        menuRef.current?.close()
+        menuRef.close()
         router.push('/CharacterEditor')
     }
 

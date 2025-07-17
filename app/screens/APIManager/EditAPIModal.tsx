@@ -5,7 +5,7 @@ import MultiDropdownSheet from '@components/input/MultiDropdownSheet'
 import ThemedTextInput from '@components/input/ThemedTextInput'
 import FadeBackrop from '@components/views/FadeBackdrop'
 import { CLAUDE_VERSION } from '@lib/constants/GlobalValues'
-import { APIConfiguration } from '@lib/engine/API/APIBuilder.types'
+import { APIConfiguration } from '@lib/engine/API/APIBuilder.types' // <--- Adjusted import here
 import { APIManagerValue, APIState } from '@lib/engine/API/APIManagerState'
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'

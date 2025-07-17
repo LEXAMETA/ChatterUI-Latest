@@ -2,7 +2,7 @@ import Alert from '@components/views/Alert'
 import FadeDownView from '@components/views/FadeDownView'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // import PopupMenuHandle
 import { Logger, LogLevel } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 import { saveStringToDownload } from '@lib/utils/File'
@@ -17,6 +17,7 @@ const Logs = () => {
     }))
 
     const logitems = logs.toReversed()
+
     const handleExportLogs = () => {
         if (!logs) return
         const data = logs
@@ -63,17 +64,17 @@ const Logs = () => {
                 {
                     label: 'Export Logs',
                     icon: 'export',
-                    onPress: (m) => {
+                    onPress: (m: PopupMenuHandle) => {   // use PopupMenuHandle here
                         handleExportLogs()
-                        m.current?.close()
+                        m.close() // changed from m.current?.close()
                     },
                 },
                 {
                     label: 'Flush Logs',
                     icon: 'delete',
-                    onPress: (m) => {
+                    onPress: (m: PopupMenuHandle) => { // use PopupMenuHandle here
                         handleFlushLogs()
-                        m.current?.close()
+                        m.close() // changed from m.current?.close()
                     },
                     warning: true,
                 },
@@ -100,7 +101,7 @@ const Logs = () => {
                     inverted
                     estimatedItemSize={30}
                     data={logitems}
-                    keyExtractor={(item, index) => index.toString()}
+                    keyExtractor={(_, index) => index.toString()}
                     renderItem={({ item }) => (
                         <Text
                             style={{

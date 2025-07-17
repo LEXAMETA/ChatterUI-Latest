@@ -9,7 +9,7 @@ import Alert from '@components/views/Alert'
 import FadeDownView from '@components/views/FadeDownView'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu'  // Import PopupMenuHandle
 import TextBoxModal from '@components/views/TextBoxModal'
 import { AppSettings } from '@lib/constants/GlobalValues'
 import useAutosave from '@lib/hooks/AutoSave'
@@ -45,8 +45,8 @@ const FormattingManager = () => {
     const instructID = currentInstruct?.id
     const { color, spacing, borderRadius } = Theme.useTheme()
     const { data } = useLiveQuery(Instructs.db.query.instructListQuery())
-    const instructList = data
-    const selectedItem = data.filter((item) => item.id === instructID)?.[0]
+    const instructList = data ?? []
+    const selectedItem = data?.filter((item) => item.id === instructID)?.[0]
     const [showNewInstruct, setShowNewInstruct] = useState<boolean>(false)
     const { textFilter, setTextFilter } = useTextFilterState((state) => ({
         textFilter: state.filter,
@@ -96,19 +96,16 @@ const FormattingManager = () => {
                     label: 'Delete Instruct',
                     onPress: async () => {
                         if (!instructID) return
-                        const leftover = data.filter((item) => item.id !== instructID)
-                        // Fix for TS2532: Object is possibly 'undefined'.
-                        // Ensure 'leftover' has at least one element before trying to access 'leftover[0].id'
+                        const leftover = data?.filter((item) => item.id !== instructID) ?? []
                         if (leftover.length === 0) {
                             Logger.warnToast('Cannot delete last instruct')
                             return
                         }
                         Instructs.db.mutate.deleteInstruct(instructID)
-                        if (leftover[0]) { // Explicitly check leftover[0]
+                        if (leftover[0]) {
                             loadInstruct(leftover[0].id)
                         } else {
-                            Logger.error('No leftover instruct found after deletion to load next.');
-                            // Consider a sensible fallback here, like loading a default or navigating away
+                            Logger.error('No leftover instruct found after deletion to load next.')
                         }
                     },
                     type: 'warning',
@@ -126,35 +123,34 @@ const FormattingManager = () => {
                 {
                     label: 'Create Config',
                     icon: 'addfile',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         setShowNewInstruct(true)
-
-                        menu.current?.close()
+                        menu.close() // Fixed here
                     },
                 },
                 {
                     label: 'Export Config',
                     icon: 'download',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         handleExportPreset()
-                        menu.current?.close()
+                        menu.close() // Fixed here
                     },
                 },
                 {
                     label: 'Delete Config',
                     icon: 'delete',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         handleDeletePreset()
-                        menu.current?.close()
+                        menu.close() // Fixed here
                     },
                     warning: true,
                 },
                 {
                     label: 'Regenerate Default',
                     icon: 'reload1',
-                    onPress: (menu) => {
+                    onPress: (menu: PopupMenuHandle) => {
                         handleRegenerateDefaults()
-                        menu.current?.close()
+                        menu.close() // Fixed here
                     },
                 },
             ]}
@@ -163,17 +159,15 @@ const FormattingManager = () => {
 
     useAutosave({ data: currentInstruct, onSave: () => handleSaveInstruct(false), interval: 3000 })
 
-    // Fix for TS7030: Not all code paths return a value.
-    // Add a return statement for when currentInstruct is null or undefined.
     if (!currentInstruct) {
         return (
-            <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color.neutral._100 }}>
+            <SafeAreaView
+                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color.neutral._100 }}>
                 <Text style={{ color: color.text._900 }}>Loading formatting options...</Text>
             </SafeAreaView>
-        );
+        )
     }
-    
-    // If currentInstruct is defined, proceed with rendering the main component
+
     return (
         <FadeDownView style={{ flex: 1 }}>
             <SafeAreaView
@@ -191,7 +185,7 @@ const FormattingManager = () => {
                                 Logger.warnToast(`Config name already exists.`)
                                 return
                             }
-                            if (!currentInstruct) return // This check is good, but the outer `if` handles main flow
+                            if (!currentInstruct) return
 
                             Instructs.db.mutate
                                 .createInstruct({ ...currentInstruct, name: text })
@@ -455,14 +449,11 @@ const FormattingManager = () => {
                                 markdownit={MarkdownStyle.Rules}
                                 rules={MarkdownStyle.RenderRules}
                                 style={markdownStyle}>
-                                {/* Fix for TS2532: Object is possibly 'undefined'. */}
-                                {/* Use optional chaining for safer access */}
-                                {currentInstruct.format_type !== undefined && // Ensures format_type is not undefined
-                                currentInstruct.format_type >= 0 && // Ensures index is non-negative
-                                currentInstruct.format_type < autoformatterData.length // Ensures index is within bounds
-                                    ? autoformatterData[currentInstruct.format_type]?.example // Use optional chaining here
-                                    : '*<No Example Available>*' // Fallback text
-                                }
+                                {currentInstruct.format_type !== undefined &&
+                                currentInstruct.format_type >= 0 &&
+                                currentInstruct.format_type < autoformatterData.length
+                                    ? autoformatterData[currentInstruct.format_type]?.example
+                                    : '*<No Example Available>*'}
                             </Markdown>
                         </View>
                         <View>
@@ -501,40 +492,6 @@ const FormattingManager = () => {
                         value={useTemplate}
                         onChangeValue={setUseTemplate}
                     />
-
-                    {/* @TODO: Macros are always replaced - people may want this to be changed
-                        <CheckboxTitle
-                            name="Replace Macro In Sequences"
-                            varname="macro"
-                            body={currentInstruct}
-                            setValue={setCurrentInstruct}
-                        />
-                        */}
-
-                    {/* Groups are not implemented - leftover from ST
-                        <CheckboxTitle
-                            name="Force for Groups and Personas"
-                            varname="names_force_groups"
-                            body={currentInstruct}
-                            setValue={setCurrentInstruct}
-                        />
-                        */}
-                    {/* Activates Instruct when model is loaded with specific name that matches regex
-                
-                        <TextBox
-                            name="Activation Regex"
-                            varname="activation_regex"
-                            body={currentInstruct}
-                            setValue={setCurrentInstruct}
-                        />*/}
-                    {/* User Alignment Messages may be needed in future, might be removed on CCv3
-                        <TextBox
-                            name="User Alignment"
-                            varname="user_alignment_message"
-                            body={currentInstruct}
-                            setValue={setCurrentInstruct}
-                            multiline
-                        />*/}
                 </ScrollView>
             </SafeAreaView>
         </FadeDownView>
