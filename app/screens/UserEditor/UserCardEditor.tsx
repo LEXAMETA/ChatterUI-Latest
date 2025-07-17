@@ -13,6 +13,15 @@ import React, { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
+// Assuming PopupMenuHandle is the type that directly has the .close() method.
+// If it's a ref object, we might need to adjust the PopupMenu component's props.
+// For now, we'll assume `menu` is the direct handle.
+interface PopupMenuHandle {
+    close: () => void;
+    // Add other methods if PopupMenu provides them (e.g., open, toggle, etc.)
+}
+
+
 const UserCardEditor = () => {
     const styles = useStyles()
     const { color, spacing } = Theme.useTheme()
@@ -48,7 +57,20 @@ const UserCardEditor = () => {
             type: 'image/*',
         }).then((result) => {
             if (result.canceled) return
-            if (id) updateImage(result.assets[0].uri)
+
+            // FIX: Explicitly check for assets and their uri property
+            if (result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+                if (asset && asset.uri) { // Ensure asset and its uri are defined
+                    if (id) updateImage(asset.uri); // Use asset.uri directly
+                } else {
+                    console.warn('Picked asset or its URI is undefined.');
+                    // Optionally show an alert to the user
+                }
+            } else {
+                console.warn('Document picker returned no assets in success state.');
+                // Optionally show an alert to the user
+            }
         })
     }
 
@@ -79,24 +101,27 @@ const UserCardEditor = () => {
                         {
                             label: 'Change Image',
                             icon: 'picture',
-                            onPress: (menu) => {
-                                menu.current?.close()
+                            // FIX: Use 'menu' directly if it's the handle
+                            onPress: (menu: PopupMenuHandle) => { // Type 'menu' explicitly
+                                menu.close() // <--- Changed here
                                 handleUploadImage()
                             },
                         },
                         {
                             label: 'View Image',
                             icon: 'search1',
-                            onPress: (menu) => {
-                                menu.current?.close()
+                            // FIX: Use 'menu' directly if it's the handle
+                            onPress: (menu: PopupMenuHandle) => { // Type 'menu' explicitly
+                                menu.close() // <--- Changed here
                                 setShowViewer(true, true)
                             },
                         },
                         {
                             label: 'Delete Image',
                             icon: 'delete',
-                            onPress: (menu) => {
-                                menu.current?.close()
+                            // FIX: Use 'menu' directly if it's the handle
+                            onPress: (menu: PopupMenuHandle) => { // Type 'menu' explicitly
+                                menu.close() // <--- Changed here
                                 handleDeleteImage()
                             },
                             warning: true,

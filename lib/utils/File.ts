@@ -40,27 +40,48 @@ export async function pickFile(
             copyToCacheDirectory,
         })
 
-        if (
-            result &&
-            result.type === 'success' &&
-            Array.isArray(result.assets) &&
-            result.assets.length > 0
-        ) {
-            const asset = result.assets[0]
-            return {
-                uri: asset.uri,
-                name: asset.name,
-                mimeType: asset.mimeType ?? null,
-                size: asset.size ?? null,
-            }
-        } else {
+        // --- FIXES START HERE ---
+        // Check for cancellation first, then process success result
+        if (result.canceled) {
             if (Logger?.info) {
-                Logger.info('File picking cancelled or no file selected.')
+                Logger.info('File picking cancelled.')
             } else {
-                console.log('File picking cancelled or no file selected.')
+                console.log('File picking cancelled.')
             }
             return null
         }
+
+        // Now, if not cancelled, it must be a success result, and we can access 'assets'
+        // Ensure assets array exists and has at least one item
+        if (Array.isArray(result.assets) && result.assets.length > 0) {
+            const asset = result.assets[0]
+            // Add explicit check for 'asset' being defined, although the array.length check implies it
+            // This satisfies TS18048 more directly in some cases, or implies result.assets[0] is not undefined.
+            if (!asset) { // Defensive check, should rarely be hit after result.assets.length > 0
+                if (Logger?.warn) {
+                    Logger.warn('No asset found in document picker result array.')
+                } else {
+                    console.warn('No asset found in document picker result array.')
+                }
+                return null
+            }
+            return {
+                uri: asset.uri,
+                name: asset.name,
+                mimeType: asset.mimeType ?? null, // Use nullish coalescing for optional properties
+                size: asset.size ?? null,         // Use nullish coalescing for optional properties
+            }
+        } else {
+            // This path would be hit if result is not cancelled but assets array is empty
+            if (Logger?.info) {
+                Logger.info('File picking completed, but no file selected (empty assets array).')
+            } else {
+                console.log('File picking completed, but no file selected (empty assets array).')
+            }
+            return null
+        }
+        // --- FIXES END HERE ---
+
     } catch (error) {
         if (Logger?.error) {
             Logger.error('Error picking file:', error)
@@ -246,9 +267,9 @@ export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONP
  * Pick a document as a string with specified encoding and MIME type.
  *
  * @param options Options object:
- *   multiple - whether to allow multiple selection (unused)
- *   encoding - encoding for read file ("utf8" or "base64"), default "utf8"
- *   type - MIME type filter, default "*\/*"
+ * multiple - whether to allow multiple selection (unused)
+ * encoding - encoding for read file ("utf8" or "base64"), default "utf8"
+ * type - MIME type filter, default "*\/*"
  * @returns Success with string data or failure
  */
 export const pickStringDocument = async ({
@@ -262,15 +283,21 @@ export const pickStringDocument = async ({
 } = {}): Promise<PickerResult> => {
     try {
         const result = await DocumentPicker.getDocumentAsync({ type })
-        if (
-            !result ||
-            result.canceled ||
-            !Array.isArray(result.assets) ||
-            result.assets.length === 0
-        ) {
+        // --- FIXES START HERE ---
+        // Check for cancellation first
+        if (result.canceled) {
             return { success: false }
         }
+
+        // Now, if not cancelled, it's a success result.
+        // Access 'assets' directly from 'result' as per DocumentPickerSuccessResult
+        if (!Array.isArray(result.assets) || result.assets.length === 0) {
+            // This case implies a success result with no assets (shouldn't happen often, but good to guard)
+            return { success: false }
+        }
+
         const asset = result.assets[0]
+        // Explicitly check if asset.uri is present before using it
         if (!asset.uri) return { success: false }
 
         const data = await FileSystem.readAsStringAsync(asset.uri, { encoding }).catch((e) => {
@@ -284,6 +311,7 @@ export const pickStringDocument = async ({
         if (data === null) return { success: false }
 
         return { success: true, data }
+        // --- FIXES END HERE ---
     } catch (error) {
         if (Logger?.error) {
             Logger.error('Error picking string document:', error)

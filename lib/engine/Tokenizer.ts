@@ -11,7 +11,8 @@ import {
 } from 'expo-file-system'
 import { create } from 'zustand'
 
-import { Llama } from './Local/LlamaLocal'
+// FIX: Import useLlama as its named export
+import { useLlama, LlamaState } from './Local/LlamaLocal' // <--- Changed this line
 
 type TokenizerState = {
     model?: LlamaContext
@@ -53,8 +54,17 @@ export namespace Tokenizer {
         if (modelExists) return
         Logger.info('Importing Tokenizer')
         const [asset] = await Asset.loadAsync(require('./../../assets/models/llama3tokenizer.gguf'))
-        await asset.downloadAsync()
-        if (asset.localUri) await copyAsync({ from: asset.localUri, to: modelDir })
+
+        // FIX: Add check for asset being defined
+        if (asset) {
+            await asset.downloadAsync()
+            if (asset.localUri) {
+                await copyAsync({ from: asset.localUri, to: modelDir })
+            }
+        } else {
+            Logger.error('Failed to load tokenizer asset.')
+            // You might want to throw an error or handle this more gracefully
+        }
     }
 
     export const debugDeleteModel = async () => {
@@ -63,13 +73,14 @@ export namespace Tokenizer {
 
     export const getTokenizer = () => {
         return useAppModeState.getState().appMode === 'local'
-            ? Llama.useLlama.getState().tokenLength
+            ? useLlama.getState().tokenLength // FIX: Use useLlama directly
             : Tokenizer.useDefaultTokenizer.getState().getTokenCount
     }
 
     export const useTokenizer = () => {
         const defaultTokenizer = useDefaultTokenizer((state) => state.getTokenCount)
-        const llamaTokenizer = Llama.useLlama((state) => state.tokenLength)
+        // FIX: Provide type for state and use useLlama directly
+        const llamaTokenizer = useLlama((state: LlamaState) => state.tokenLength) // <--- Changed this line
         const appMode = useAppModeState((state) => state.appMode)
         return appMode === 'local' ? llamaTokenizer : defaultTokenizer
     }
