@@ -1,49 +1,67 @@
 // lib/state/EngineData.ts
 
 import { create } from 'zustand';
-import { ModelDataType } from 'db/schema'; // Correct import path for ModelDataType
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { ModelDataType } from 'db/schema'; // Adjust the path if needed
+import { ContextParams } from 'cui-llama.rn'; // Import for typing config
 
-/**
- * Defines the state structure for general engine-related data,
- * such as the last loaded model, embedding models, RAG models, and configuration.
- */
-export type EngineDataState = {
-    lastModelLoaded: ModelDataType | null;
-    embeddingModelId: number | null;
-    ragReasoningModelId: number | null;
-    // Assuming 'config' is an object that holds various settings.
-    // You might want to define a more specific type for 'config' later.
-    config: {
-        // Example properties, adjust based on actual usage in loadModelContext or other places
-        // e.g., n_ctx, n_threads, n_gpu_layers, etc.
-        // For now, using 'any' as a placeholder if structure is unknown.
-        n_ctx?: number;
-        n_threads?: number;
-        n_gpu_layers?: number;
-        n_batch?: number;
-        // ... other config properties as needed by useEngineData.getState().config
-    };
+export interface EngineConfig extends Omit<ContextParams, 'model'> {
+  n_ctx: number;
+  n_threads: number;
+  n_gpu_layers: number;
+  n_batch: number;
+  // You can add more engine-specific config props here if needed
+}
 
-    // Actions (setters) for the state properties
-    setLastModelLoaded: (model: ModelDataType | null) => void;
-    setEmbeddingModelId: (id: number | null) => void;
-    setRagReasoningModelId: (id: number | null) => void;
-    setConfig: (config: any) => void; // Or more specific type for config
-};
+export interface EngineDataState {
+  config: EngineConfig;
+  lastModelLoaded: ModelDataType | null;
+  embeddingModelId: number | null;
+  ragReasoningModelId: number | null;
+  selectedEmbeddingLoRAUri: string | null;
+  selectedReasoningLoRAUri: string | null;
 
-export const useEngineData = create<EngineDataState>()((set) => ({
-    lastModelLoaded: null, // Initial state for last loaded main chat model
-    embeddingModelId: null, // Initial state for selected embedding model ID
-    ragReasoningModelId: null, // Initial state for selected RAG reasoning model ID
-    config: { // Initial state for config, populate with defaults if known
-        n_ctx: 4096, // Example default, verify with your app's actual defaults
+  setEngineConfig: (config: Partial<EngineConfig>) => void;
+  setLastModelLoaded: (model: ModelDataType | null) => void;
+  setEmbeddingModelId: (id: number | null) => void;
+  setRagReasoningModelId: (id: number | null) => void;
+  setSelectedEmbeddingLoRAUri: (uri: string | null) => void;
+  setSelectedReasoningLoRAUri: (uri: string | null) => void;
+}
+
+export const useEngineData = create<EngineDataState>()(
+  persist(
+    (set, get) => ({
+      config: {
+        n_ctx: 4096,
         n_threads: 4,
         n_gpu_layers: 0,
         n_batch: 512,
-    },
+      },
+      lastModelLoaded: null,
+      embeddingModelId: null,
+      ragReasoningModelId: null,
+      selectedEmbeddingLoRAUri: null,
+      selectedReasoningLoRAUri: null,
 
-    setLastModelLoaded: (model) => set({ lastModelLoaded: model }),
-    setEmbeddingModelId: (id) => set({ embeddingModelId: id }),
-    setRagReasoningModelId: (id) => set({ ragReasoningModelId: id }),
-    setConfig: (newConfig) => set((state) => ({ config: { ...state.config, ...newConfig } })),
-}));
+      setEngineConfig: (newConfig) => set((state) => ({ config: { ...state.config, ...newConfig } })),
+      setLastModelLoaded: (model) => set({ lastModelLoaded: model }),
+      setEmbeddingModelId: (id) => set({ embeddingModelId: id }),
+      setRagReasoningModelId: (id) => set({ ragReasoningModelId: id }),
+      setSelectedEmbeddingLoRAUri: (uri) => set({ selectedEmbeddingLoRAUri: uri }),
+      setSelectedReasoningLoRAUri: (uri) => set({ selectedReasoningLoRAUri: uri }),
+    }),
+    {
+      name: 'engine-data-storage',
+      storage: createJSONStorage(() => localStorage), // Change to your preferred storage like MMKV if needed
+      partialize: (state) => ({
+        config: state.config,
+        embeddingModelId: state.embeddingModelId,
+        ragReasoningModelId: state.ragReasoningModelId,
+        selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
+        selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
+        // Note: lastModelLoaded typically is runtime state, so not persisted
+      }),
+    }
+  )
+);

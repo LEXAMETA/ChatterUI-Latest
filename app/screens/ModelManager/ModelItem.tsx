@@ -4,11 +4,12 @@ import Alert from '@components/views/Alert'
 import TextBoxModal from '@components/views/TextBoxModal'
 import { AntDesign } from '@expo/vector-icons'
 import { GGMLNameMap } from '@lib/engine/Local'
-import { useLlama, useEngineData } from '@lib/engine/Local/LlamaLocal' // Changed import
+import { useLlama } from '@lib/engine/Local/LlamaLocal'
+import { useEngineData } from '@lib/state/EngineData'
 import { Model } from '@lib/engine/Local/Model'
 import { Theme } from '@lib/theme/ThemeManager'
 import { readableFileSize } from '@lib/utils/File'
-import { Logger } from '@state/Logger' // Added import for Logger
+import { Logger } from '@lib/state/Logger'
 import { ModelDataType } from 'db/schema'
 import { useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
@@ -21,7 +22,7 @@ type ModelItemProps = {
     modelImporting: boolean // True if ANY model is importing
     // New props for main chat model
     currentChatModel: ModelDataType | undefined
-    loadCurrentChatModel: (model: ModelDataType) => Promise<void>
+    loadCurrentChatModel: (model: ModelDataType) => Promise<boolean> // FIX: Changed to Promise<boolean>
 }
 
 const ModelItem: React.FC<ModelItemProps> = ({
@@ -62,14 +63,14 @@ const ModelItem: React.FC<ModelItemProps> = ({
                     onPress: async () => {
                         // If the deleted model is the currently loaded main chat model, unload it
                         if (isCurrentModelActive) {
-                            await useLlama.getState().unloadCurrentChatModel() // Changed Llama.useLlama to useLlama
+                            await useLlama.getState().unloadCurrentChatModel()
                         }
                         // If the deleted model is assigned as a RAG model, unset its ID
-                        if (useEngineData.getState().embeddingModelId === item.id) { // Changed Llama.useEngineData to useEngineData
-                            useEngineData.getState().setEmbeddingModelId(null) // Changed Llama.useEngineData to useEngineData
+                        if (useEngineData.getState().embeddingModelId === item.id) {
+                            useEngineData.getState().setEmbeddingModelId(null)
                         }
-                        if (useEngineData.getState().ragReasoningModelId === item.id) { // Changed Llama.useEngineData to useEngineData
-                            useEngineData.getState().setRagReasoningModelId(null) // Changed Llama.useEngineData to useEngineData
+                        if (useEngineData.getState().ragReasoningModelId === item.id) {
+                            useEngineData.getState().setRagReasoningModelId(null)
                         }
 
                         await Model.deleteModelById(item.id)
@@ -90,9 +91,10 @@ const ModelItem: React.FC<ModelItemProps> = ({
         if (disableLoad) return
 
         if (item.model_type !== 'main_chat') {
-            Alert.alert({ // Changed to object syntax for Alert.alert
+            Alert.alert({
                 title: 'Incorrect Model Type',
                 description: `This model is of type '${item.model_type}' and cannot be loaded as the main chat model.`,
+                buttons: [{ label: 'OK', onPress: () => {} }], // FIX: Changed 'text' to 'label' and added onPress
             })
             return
         }
@@ -101,8 +103,8 @@ const ModelItem: React.FC<ModelItemProps> = ({
         try {
             await loadCurrentChatModel(item)
             Logger.infoToast(`Main chat model '${item.name}' loaded.`)
-        } catch (error: any) { // Added type 'any' for error
-            Logger.errorToast(`Failed to load model: ${error.message}`)
+        } catch (error: any) {
+            Logger.errorToast(`Failed to load model: ${(error as Error).message}`)
         } finally {
             setModelLoading(false)
         }
@@ -113,10 +115,10 @@ const ModelItem: React.FC<ModelItemProps> = ({
 
         setModelLoading(true)
         try {
-            await useLlama.getState().unloadCurrentChatModel() // Changed Llama.useLlama to useLlama
+            await useLlama.getState().unloadCurrentChatModel()
             Logger.infoToast(`Main chat model '${item.name}' unloaded.`)
-        } catch (error: any) { // Added type 'any' for error
-            Logger.errorToast(`Failed to unload model: ${error.message}`)
+        } catch (error: any) {
+            Logger.errorToast(`Failed to unload model: ${(error as Error).message}`)
         } finally {
             setModelLoading(false)
         }
@@ -192,7 +194,7 @@ const ModelItem: React.FC<ModelItemProps> = ({
                         {!isCurrentModelActive ? (
                             <TouchableOpacity disabled={disableLoad} onPress={handleLoadChatModel}>
                                 {modelLoading &&
-                                useLlama.getState().currentChatModel?.id === item.id ? ( // Changed Llama.useLlama to useLlama
+                                useLlama.getState().currentChatModel?.id === item.id ? (
                                     <ActivityIndicator
                                         size="small"
                                         color={color.text._300}
@@ -212,7 +214,7 @@ const ModelItem: React.FC<ModelItemProps> = ({
                                 disabled={disableUnload}
                                 onPress={handleUnloadChatModel}>
                                 {modelLoading &&
-                                useLlama.getState().currentChatModel?.id === item.id ? ( // Changed Llama.useLlama to useLlama
+                                useLlama.getState().currentChatModel?.id === item.id ? (
                                     <ActivityIndicator
                                         size="small"
                                         color={color.text._100}

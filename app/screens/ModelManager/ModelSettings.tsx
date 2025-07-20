@@ -24,16 +24,22 @@ import ThemedButton from '@components/buttons/ThemedButton'
 import PopupMenu from '@components/views/PopupMenu'
 
 import * as LlamaModule from '@lib/engine/Local/LlamaLocal'
-import { GGMLNameMap, GGMLType } from '@lib/engine/Local/GGML'
+import { LlamaContext } from '@lib/engine/Local/LlamaLocal' // Import LlamaContext type directly from LlamaLocal
 
-import { Theme } from '@lib/theme/ThemeManager'
-import { ModelDataType } from 'db/schema'
-import { AppSettings, useEngineData, EngineDataProps } from '@constants/GlobalValues'
-import { Logger } from '@state/Logger'
+// FIX: Changed import path to @lib/constants/GlobalValues
+import { AppSettings } from '@lib/constants/GlobalValues'
+import { useEngineData, EngineDataState } from '@lib/state/EngineData'
 import { useMMKVBoolean } from '@storage/MMKV'
 import { readableFileSize } from '@lib/utils/File'
 
+// FIX: Changed import path to @lib/state/Logger
+import { Logger } from '@lib/state/Logger'
+// This path alias seems correct already based on @lib/*
+import { reportModelError } from '@lib/engine/utils/LoggerUtils'
+import { Theme } from '@lib/theme/ThemeManager'
+
 import AntDesign from '@expo/vector-icons/AntDesign'
+import { ModelDataType } from 'db/schema' // ModelDataType is from db/schema
 
 // Enums for context types
 enum ContextType {
@@ -64,7 +70,7 @@ export interface ModelSettingsProps {
   modelLoading: boolean
   setModelLoading: Dispatch<SetStateAction<boolean>>
   exit: () => void
-  models: ModelDataType[]
+  models: ModelDataType[] // Passed from ModelManager/index.tsx
   embeddingModelId: number | null
   ragReasoningModelId: number | null
   setEmbeddingModelId: (id: number | null) => void
@@ -111,7 +117,7 @@ const useLoRAFiles = (
     let isActive = true
     const loadLoRAs = async () => {
       try {
-        const loraPath = `${LlamaModule.AppDirectory.LoRAPath}`
+        const loraPath = `${LlamaModule.AppDirectory.LoRAPath}` // Use LlamaModule.AppDirectory
         const info = await FileSystem.getInfoAsync(loraPath)
         if (!info.exists) {
           await FileSystem.makeDirectoryAsync(loraPath)
@@ -138,7 +144,7 @@ const useLoRAFiles = (
         const reasoningFile = loraFiles.find((f) => f.uri === selectedReasoningUri) ?? null
         dispatch({ type: 'SELECT_REASONING', payload: reasoningFile })
       } catch (error) {
-        Logger.errorToast(`Error loading LoRA files: ${(error as Error).message}`)
+        reportModelError('LoRA Files', `Error loading LoRA files: ${(error as Error).message}`)
       }
     }
     loadLoRAs()
@@ -158,6 +164,7 @@ interface ModelPickerProps {
   onSelectId: (id: number | null) => void
   loadedContextModel: ModelDataType | null | undefined
   disabled: boolean
+  models: ModelDataType[] // NEW: Pass models array as prop
 }
 
 const ModelPicker: React.FC<ModelPickerProps> = ({
@@ -167,25 +174,19 @@ const ModelPicker: React.FC<ModelPickerProps> = ({
   onSelectId,
   loadedContextModel,
   disabled,
+  models, // Receive models here
 }) => {
   const styles = useStyles()
   const { color, spacing } = Theme.useTheme()
 
-  const filteredModels = React.useMemo(
-    () => filteredModelsSafe(),
-    [currentModelId, contextType]
-  )
-
-  function filteredModelsSafe() {
-    return loadedContextModel
-      ? loadedContextModel.id === currentModelId
-        ? []
-        : []
-      : []
-  }
-
-  const filtered = filteredModelsSafe()
-  // (Your original version filtered here based on models - will pass models as prop in usage)
+  // Filter models based on contextType and exclude the currently loaded one if it's already active
+  const filteredModels = React.useMemo(() => {
+    return models.filter(
+      (model) =>
+        model.model_type === contextType &&
+        model.id !== currentModelId // Exclude the currently selected one from the list of options
+    )
+  }, [models, contextType, currentModelId])
 
   return (
     <View style={styles.sectionContainer}>
@@ -195,8 +196,8 @@ const ModelPicker: React.FC<ModelPickerProps> = ({
         icon={PopupIcons.database}
         disabled={disabled}
         options={
-          filtered.length > 0
-            ? filtered.map((model) => ({
+          filteredModels.length > 0
+            ? filteredModels.map((model) => ({
                 label: model.name,
                 onPress: () => onSelectId(model.id),
                 icon: PopupIcons.database,
@@ -204,7 +205,7 @@ const ModelPicker: React.FC<ModelPickerProps> = ({
             : [
                 {
                   label: 'No models of this type available',
-                  onPress: () => {},
+                  onPress: () => {}, // No-op for disabled option
                   icon: PopupIcons.exclamationcircleo,
                 },
               ]
@@ -212,7 +213,7 @@ const ModelPicker: React.FC<ModelPickerProps> = ({
       >
         <View style={styles.selectionDisplay}>
           <Text style={styles.selectionText}>
-            {filtered.find((m) => m.id === currentModelId)?.name || 'Select a model'}
+            {models.find((m) => m.id === currentModelId)?.name || 'Select a model'}
           </Text>
           {loadedContextModel?.id === currentModelId && (
             <Text style={styles.loadedStatus}> (Active)</Text>
@@ -300,7 +301,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
   modelLoading,
   setModelImporting,
   setModelLoading,
-  models,
+  models, // Receive models here
   embeddingModelId,
   ragReasoningModelId,
   setEmbeddingModelId,
@@ -315,9 +316,9 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     selectedReasoningLoRAUri,
     setSelectedEmbeddingLoRAUri,
     setSelectedReasoningLoRAUri,
-  } = useEngineData((state: EngineDataProps) => ({
+  } = useEngineData((state: EngineDataState) => ({
     selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
-    selectedReasoningLoRAUri: state.selectedReasoningLOraUri,
+    selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
     setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
     setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
   }))
@@ -338,16 +339,20 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     if (modelImporting || modelLoading) return
 
     try {
+      setModelImporting(true)
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: false,
       })
 
-      if (result.type === 'cancel') return
+      if (result.canceled) {
+        setModelImporting(false)
+        return
+      }
 
-      // DocumentPicker changed API: assets[0] might be present for multiple files; fallback to result object
-      const file: any = (result as any).assets?.[0] ?? result
+      const file = result.assets?.[0];
       if (!file?.uri || !file?.name) {
-        Logger.errorToast('No valid file selected')
+        reportModelError('LoRA Import', 'No valid file selected');
+        setModelImporting(false)
         return
       }
 
@@ -363,8 +368,10 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         Logger.infoToast('LoRA file copied successfully!')
       }
     } catch (error: any) {
-      Logger.errorToast(`Failed to copy lora file: ${error.message}`)
+      reportModelError('LoRA Import', `Failed to copy LoRA file: ${error.message}`);
       console.error('Error copying LoRA file:', error)
+    } finally {
+      setModelImporting(false)
     }
   }
 
@@ -372,10 +379,10 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
   const handleSelectFile = (type: ContextType, file: FileEntry | null) => {
     if (type === ContextType.Embedding) {
       dispatch({ type: 'SELECT_EMBEDDING', payload: file })
-      setSelectedEmbeddingLoRAUri(file ? file.uri : null)
+      useEngineData.getState().setSelectedEmbeddingLoRAUri(file ? file.uri : null)
     } else {
       dispatch({ type: 'SELECT_REASONING', payload: file })
-      setSelectedReasoningLoRAUri(file ? file.uri : null)
+      useEngineData.getState().setSelectedReasoningLoRAUri(file ? file.uri : null)
     }
   }
 
@@ -410,17 +417,18 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
 
     const baseModel = models.find((m) => m.id === modelId)
     if (!baseModel) {
-      Alert.alert(
-        'Model Not Found',
+      reportModelError(
+        modelTypeName,
         `Selected base model (ID: ${modelId}) not found in database. Please re-select.`
       )
-      setModelId(null)
+      if (contextType === ContextType.Embedding) setEmbeddingModelId(null);
+      else setRagReasoningModelId(null);
       return
     }
 
     if (baseModel.model_type !== modelTypeName) {
-      Alert.alert(
-        'Incorrect Model Type',
+      reportModelError(
+        modelTypeName,
         `The selected model "${baseModel.name}" is of type "${baseModel.model_type}", but a "${modelTypeName}" model is required here.`
       )
       return
@@ -434,10 +442,10 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
           `${baseModel.name} (${modelTypeName}) loaded${loraUri ? ' with LoRA' : ''}.`
         )
       } else {
-        Logger.errorToast(`Failed to load ${modelTypeName} model.`)
+        reportModelError(modelTypeName, `Failed to load ${modelTypeName} model.`)
       }
     } catch (e: any) {
-      Logger.errorToast(`Error loading ${modelTypeName} model: ${e.message}`)
+      reportModelError(modelTypeName, `Error loading ${modelTypeName} model: ${e.message}`)
       console.error(`Error loading ${modelTypeName} model:`, e)
     } finally {
       setModelLoading(false)
@@ -455,13 +463,13 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
       }
       Logger.infoToast(`${contextType} model unloaded.`)
     } catch (e: any) {
-      Logger.errorToast(`Failed to unload ${contextType} model: ${e.message}`)
+      reportModelError(contextType, `Failed to unload ${contextType} model: ${e.message}`)
     } finally {
       setModelLoading(false)
     }
   }
 
-  // Get currently loaded RAG models
+  // Get currently loaded RAG models from LlamaLocal's internal state
   const {
     loadedEmbeddingModelInContext: currentEmbeddingContextModel,
     loadedRagReasoningModelInContext: currentReasoningContextModel,
@@ -478,6 +486,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         onSelectId={setEmbeddingModelId}
         loadedContextModel={currentEmbeddingContextModel}
         disabled={modelLoading || modelImporting}
+        models={models}
       />
       <LoRAPicker
         selectedFile={selectedEmbeddingLoRA}
@@ -516,6 +525,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         onSelectId={setRagReasoningModelId}
         loadedContextModel={currentReasoningContextModel}
         disabled={modelLoading || modelImporting}
+        models={models}
       />
       <LoRAPicker
         selectedFile={selectedReasoningLoRA}

@@ -1,11 +1,11 @@
 // app/screens/ModelManager/ModelNewMenu.tsx
 
-import PopupMenu, { MenuRef } from '@components/views/PopupMenu'
-import { Model } from '@lib/engine/Local/Model' // Assuming Model.importModel and Model.linkModelExternal handle the actual import/linking
-import { Logger } from '@lib/state/Logger' // Import Logger
-import { ModelType } from 'db/schema' // Import ModelType from your schema
-import { useState, useRef } from 'react' // Import useRef
-import { View, Alert, Platform } from 'react-native' // Import Alert and Platform
+import PopupMenu from '@components/views/PopupMenu' // FIX: Removed MenuRef import
+import { Model } from '@lib/engine/Local/Model'
+import { Logger } from '@lib/state/Logger'
+import { ModelType } from 'db/schema'
+import { useState, useRef } from 'react'
+import { View, Alert, Platform } from 'react-native'
 
 type ModelNewMenuProps = {
     modelImporting: boolean
@@ -13,7 +13,8 @@ type ModelNewMenuProps = {
 }
 
 const ModelNewMenu: React.FC<ModelNewMenuProps> = ({ modelImporting, setModelImporting }) => {
-    const menuRef = useRef<MenuRef>(null) // Create a ref for the PopupMenu if needed to close it programmatically
+    // FIX: Changed MenuRef to any, as it's not exported by PopupMenu
+    const menuRef = useRef<any>(null) // Create a ref for the PopupMenu if needed to close it programmatically
 
     const showModelTypeSelection = (onSelect: (type: ModelType) => Promise<void>) => {
         if (Platform.OS === 'ios') {
@@ -41,8 +42,6 @@ const ModelNewMenu: React.FC<ModelNewMenuProps> = ({ modelImporting, setModelImp
                 { cancelable: true }
             )
         } else {
-            // For Android or other platforms, a simpler prompt or custom modal might be needed.
-            // For now, let's use a text input prompt for demonstration, user types the value.
             Alert.prompt(
                 'Select Model Type',
                 'Enter model type (main_chat, rag_embedding, rag_reasoning):',
@@ -79,14 +78,14 @@ const ModelNewMenu: React.FC<ModelNewMenuProps> = ({ modelImporting, setModelImp
         showModelTypeSelection(async (modelType) => {
             setModelImporting(true)
             try {
-                const success = await Model.linkModelExternal(modelType) // Pass the modelType
+                const success = await Model.linkModelExternal(modelType)
                 if (success) {
                     Logger.infoToast(`Model linked successfully as '${modelType}'.`)
                 } else {
                     Logger.errorToast(`Failed to link model as '${modelType}'.`)
                 }
             } catch (error: any) {
-                Logger.errorToast(`Error linking model: ${error.message}`)
+                Logger.errorToast(`Error linking model: ${(error as Error).message}`)
                 console.error('Error linking model:', error)
             } finally {
                 setModelImporting(false)
@@ -101,14 +100,14 @@ const ModelNewMenu: React.FC<ModelNewMenuProps> = ({ modelImporting, setModelImp
         showModelTypeSelection(async (modelType) => {
             setModelImporting(true)
             try {
-                const success = await Model.importModel(modelType) // Pass the modelType
+                const success = await Model.importModel(modelType)
                 if (success) {
                     Logger.infoToast(`Model imported successfully as '${modelType}'.`)
                 } else {
                     Logger.errorToast(`Failed to import model as '${modelType}'.`)
                 }
             } catch (error: any) {
-                Logger.errorToast(`Error importing model: ${error.message}`)
+                Logger.errorToast(`Error importing model: ${(error as Error).message}`)
                 console.error('Error importing model:', error)
             } finally {
                 setModelImporting(false)

@@ -6,12 +6,12 @@ import HeaderTitle from '@components/views/HeaderTitle'
 import { AntDesign } from '@expo/vector-icons'
 // FIX 1: Import useLlama and LlamaState directly
 import { useLlama, LlamaState } from '@lib/engine/Local/LlamaLocal'
-import { Model } from '@lib/engine/Local/Model' // Keep this import
+import { Model } from '@lib/engine/Local/Model'
 // FIX 3: Import useEngineData and EngineDataState directly
-import { useEngineData, EngineDataState } from '@lib/state/EngineData' // You'll need to define/import EngineDataState if not already
+import { useEngineData, EngineDataState } from '@lib/state/EngineData'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useState, Dispatch, SetStateAction } from 'react' // Import Dispatch and SetStateAction
+import { useState, Dispatch, SetStateAction } from 'react'
 import { StyleSheet, Text, View, FlatList } from 'react-native'
 import * as Progress from 'react-native-progress'
 import Animated, { Easing, SlideInLeft, SlideOutLeft } from 'react-native-reanimated'
@@ -19,11 +19,7 @@ import Animated, { Easing, SlideInLeft, SlideOutLeft } from 'react-native-reanim
 import ModelEmpty from './ModelEmpty'
 import ModelItem from './ModelItem'
 import ModelNewMenu from './ModelNewMenu'
-import ModelSettings from './ModelSettings' // Assuming ModelSettings component exists
-
-// Add ModelSettingsProps interface definition here if it's not in ModelSettings.tsx,
-// or ensure it's imported from ModelSettings.tsx.
-// For now, I'll assume you'll update ModelSettings.tsx itself for the props.
+import ModelSettings from './ModelSettings'
 
 const ModelManager = () => {
     const styles = useStyles()
@@ -33,18 +29,17 @@ const ModelManager = () => {
 
     const [showSettings, setShowSettings] = useState(false)
 
-    // Moved modelLoading and modelImporting state here to be managed globally for ModelManager
-    const [modelLoading, setModelLoading] = useState(false) // Global loading for any model operation (loading/unloading context)
-    const [modelImporting, setModelImporting] = useState(false) // Global loading for file import/linking
+    const [modelLoading, setModelLoading] = useState(false)
+    const [modelImporting, setModelImporting] = useState(false)
 
-    // Select currentChatModel and load/unload functions directly from useLlama state
+    // FIX 2: Use useLlama directly and type 'state', and ensure correct return types for selected functions
     const {
         currentChatModel,
         loadProgress,
         setloadProgress,
-        loadCurrentChatModel,
+        loadCurrentChatModel, // This will now correctly be Promise<boolean>
         unloadCurrentChatModel,
-    } = useLlama((state: LlamaState) => ({ // FIX 2: Use useLlama directly and type 'state'
+    } = useLlama((state: LlamaState) => ({
         currentChatModel: state.currentChatModel,
         loadProgress: state.loadProgress,
         setloadProgress: state.setLoadProgress,
@@ -54,7 +49,7 @@ const ModelManager = () => {
 
     // Get RAG model IDs and setters from useEngineData state
     const { embeddingModelId, ragReasoningModelId, setEmbeddingModelId, setRagReasoningModelId } =
-        useEngineData((state: EngineDataState) => ({ // FIX 3: Use useEngineData directly and type 'state'
+        useEngineData((state: EngineDataState) => ({
             embeddingModelId: state.embeddingModelId,
             ragReasoningModelId: state.ragReasoningModelId,
             setEmbeddingModelId: state.setEmbeddingModelId,
@@ -167,7 +162,7 @@ const ModelManager = () => {
                                 modelImporting={modelImporting}
                                 // Pass current chat model and its loader/unloader to ModelItem
                                 currentChatModel={currentChatModel}
-                                loadCurrentChatModel={loadCurrentChatModel}
+                                loadCurrentChatModel={loadCurrentChatModel} // This is now consistent
                             />
                         )}
                         keyExtractor={(item) => item.id.toString()}
@@ -180,9 +175,9 @@ const ModelManager = () => {
             {showSettings && (
                 <ModelSettings
                     modelImporting={modelImporting}
-                    setModelImporting={setModelImporting} // Pass setter to ModelSettings
+                    setModelImporting={setModelImporting}
                     modelLoading={modelLoading}
-                    setModelLoading={setModelLoading} // Pass setter to ModelSettings
+                    setModelLoading={setModelLoading}
                     exit={() => setShowSettings(false)}
                     models={models}
                     embeddingModelId={embeddingModelId}
@@ -194,7 +189,6 @@ const ModelManager = () => {
             <ThemedButton
                 label={showSettings ? 'Back To Models' : 'Show Settings'}
                 onPress={() => setShowSettings(!showSettings)}
-                // Disable settings button if any global loading is active
                 disabled={modelLoading || modelImporting}
             />
         </View>
