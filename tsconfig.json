@@ -18,7 +18,7 @@
     "baseUrl": ".",
     "paths": {
       "@lib/*": ["lib/*"],
-      "@storage/*": ["lib/storage/*"],                 // <--- new alias
+      "@storage/*": ["lib/storage/*"],
       "@app/*": ["app/*"],
       "@assets/*": ["assets/*"],
       "@components/*": ["app/components/*"],
@@ -43,7 +43,8 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "app.d.ts",
-    "app/_layout.tsx"
+    "app/_layout.tsx",
+    "app/src/types/**/*.d.ts"
   ],
   "exclude": ["node_modules"]
 }
