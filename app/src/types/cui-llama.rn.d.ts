@@ -1,14 +1,49 @@
-// src/types/cui-llama.rn.d.ts or similar
+// src/types/cui-llama.rn.d.ts
 
 declare module 'cui-llama.rn' {
-  // Augment the existing ContextParams interface
   export interface ContextParams {
-    lora_path?: string; // Add lora_path if it's supported by the native module
-    // Add any other missing properties as needed
+    model: string;
+    n_ctx?: number;
+    n_batch?: number;
+    n_threads?: number;
+    n_gpu_layers?: number;
+    lora_path?: string;
+    // Add other parameters expected by initLlama here if needed
   }
 
-  // Define CompletionTimings if it's not exported
-  // You might need to confirm the exact structure from the cui-llama.rn documentation
+  export class LlamaContext {
+    constructor(params: ContextParams);
+
+    completion(
+      params: CompletionParams,
+      callback: (data: { token: string }) => void
+    ): Promise<{ text: string; timings: CompletionTimings }>;
+
+    stopCompletion(): Promise<void>;
+    release(): Promise<void>;
+    tokenizeSync(text: string): { tokens: number[] } | undefined;
+    saveSession(filePath: string): Promise<number>;
+    loadSession(filePath: string): Promise<void>;
+    // Add any other methods/properties as needed
+  }
+
+  export function initLlama(params: ContextParams): Promise<LlamaContext>;
+  export function getCpuFeatures(): Promise<string[]>;
+
+  export interface CompletionParams {
+    prompt: string;
+    n_predict?: number;
+    temp?: number;
+    top_k?: number;
+    top_p?: number;
+    repeat_last_n?: number;
+    repeat_penalty?: number;
+    mirostat?: number;
+    mirostat_tau?: number;
+    mirostat_eta?: number;
+    // Add other completion parameters if required
+  }
+
   export interface CompletionTimings {
     prompt_n: number;
     prompt_ms: number;
@@ -19,7 +54,4 @@ declare module 'cui-llama.rn' {
     predicted_per_token_ms: number;
     predicted_per_second?: number;
   }
-
-  // Re-export other types if necessary to make sure they are accessible from 'cui-llama.rn' directly
-  export * from 'cui-llama.rn';
 }
