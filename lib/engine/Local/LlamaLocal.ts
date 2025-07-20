@@ -175,7 +175,7 @@ export const useLlama = create<LlamaState>()((set, get) => ({
     }
     return llamaContext
       .completion(params, (data: any) => callback(data.token))
-      .then(async ({ text, timings }) => {
+      .then(async ({ text, timings }: { text: string; timings: CompletionTimings }) => {
         completed(text, timings);
         Logger.info(
           `\n---- Start Chat ${get().chatCount} ----\n${textTimings(timings)}\n---- End Chat ${get().chatCount} ----\n`
