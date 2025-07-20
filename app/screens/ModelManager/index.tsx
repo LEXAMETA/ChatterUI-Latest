@@ -4,11 +4,14 @@ import ThemedButton from '@components/buttons/ThemedButton'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
 import { AntDesign } from '@expo/vector-icons'
-import { Llama } from '@lib/engine/Local/LlamaLocal' // Keep this import
+// FIX 1: Import useLlama and LlamaState directly
+import { useLlama, LlamaState } from '@lib/engine/Local/LlamaLocal'
 import { Model } from '@lib/engine/Local/Model' // Keep this import
+// FIX 3: Import useEngineData and EngineDataState directly
+import { useEngineData, EngineDataState } from '@lib/state/EngineData' // You'll need to define/import EngineDataState if not already
 import { Theme } from '@lib/theme/ThemeManager'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useState } from 'react'
+import { useState, Dispatch, SetStateAction } from 'react' // Import Dispatch and SetStateAction
 import { StyleSheet, Text, View, FlatList } from 'react-native'
 import * as Progress from 'react-native-progress'
 import Animated, { Easing, SlideInLeft, SlideOutLeft } from 'react-native-reanimated'
@@ -16,7 +19,11 @@ import Animated, { Easing, SlideInLeft, SlideOutLeft } from 'react-native-reanim
 import ModelEmpty from './ModelEmpty'
 import ModelItem from './ModelItem'
 import ModelNewMenu from './ModelNewMenu'
-import ModelSettings from './ModelSettings'
+import ModelSettings from './ModelSettings' // Assuming ModelSettings component exists
+
+// Add ModelSettingsProps interface definition here if it's not in ModelSettings.tsx,
+// or ensure it's imported from ModelSettings.tsx.
+// For now, I'll assume you'll update ModelSettings.tsx itself for the props.
 
 const ModelManager = () => {
     const styles = useStyles()
@@ -37,7 +44,7 @@ const ModelManager = () => {
         setloadProgress,
         loadCurrentChatModel,
         unloadCurrentChatModel,
-    } = Llama.useLlama((state) => ({
+    } = useLlama((state: LlamaState) => ({ // FIX 2: Use useLlama directly and type 'state'
         currentChatModel: state.currentChatModel,
         loadProgress: state.loadProgress,
         setloadProgress: state.setLoadProgress,
@@ -47,7 +54,7 @@ const ModelManager = () => {
 
     // Get RAG model IDs and setters from useEngineData state
     const { embeddingModelId, ragReasoningModelId, setEmbeddingModelId, setRagReasoningModelId } =
-        Llama.useEngineData((state) => ({
+        useEngineData((state: EngineDataState) => ({ // FIX 3: Use useEngineData directly and type 'state'
             embeddingModelId: state.embeddingModelId,
             ragReasoningModelId: state.ragReasoningModelId,
             setEmbeddingModelId: state.setEmbeddingModelId,
