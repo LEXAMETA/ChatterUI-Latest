@@ -3,12 +3,13 @@
 import React from 'react'
 import { View, Text, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useLlama } from '@lib/engine/Local/LlamaLocal'  // fixed import/use per your note
+import { useLlama, LlamaState } from '@lib/engine/Local/LlamaLocal' // Import LlamaState for typing
 import { Theme } from '@lib/theme/ThemeManager'
 import { useRouter } from 'expo-router'
 
 const ChatModelName = () => {
-  const model = useLlama((state) => state.currentChatModel) // corrected property
+  // Use typed selector for currentChatModel from Zustand store
+  const model = useLlama((state: LlamaState) => state.currentChatModel)
   const { color, spacing, borderRadius } = Theme.useTheme()
   const router = useRouter()
 
@@ -32,6 +33,7 @@ const ChatModelName = () => {
           flex: 1,
           color: model ? color.primary._700 : color.text._400,
         }}
+        accessibilityLabel={model ? `Current model: ${model.name}` : 'No model loaded'}
       >
         {model ? model.name : 'No Model Loaded'}
       </Text>
@@ -39,7 +41,7 @@ const ChatModelName = () => {
         onPress={() => router.push('/screens/ModelManager')}
         style={{ paddingLeft: spacing.xl2, paddingVertical: spacing.m }}
         accessibilityRole="button"
-        accessibilityLabel="Go to Model Manager"
+        accessibilityHint="Navigate to Model Manager screen"
       >
         <Ionicons name="caret-forward" color={color.primary._500} size={18} />
       </TouchableOpacity>
