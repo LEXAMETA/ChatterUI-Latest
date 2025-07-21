@@ -1,20 +1,13 @@
-// lib/rag/PleiasRAGLLMWrapper.ts
-import { LlamaContext } from 'cui-llama.rn'
-import { LLM, Message } from 'react-native-rag'
-
-import { Llama } from '../engine/Local/LlamaLocal' // Correct: Import the Llama namespace
-
 export class PleiasRAGLLMWrapper implements LLM {
     private pleiasContext: LlamaContext | null = null
-    private isLoading: boolean = false // Added: State to prevent race conditions
+    private isLoading: boolean = false
 
     async load(): Promise<this> {
         if (this.pleiasContext && !this.isLoading) {
             console.log('[PleiasRAGLLMWrapper] Model already loaded or is loading. Skipping load.')
-            return this // Already loaded or in progress
+            return this
         }
         if (this.isLoading) {
-            // If already loading, wait for it to complete.
             console.log('[PleiasRAGLLMWrapper] Model is currently loading, waiting...')
             return new Promise((resolve) => {
                 const interval = setInterval(() => {
@@ -26,9 +19,8 @@ export class PleiasRAGLLMWrapper implements LLM {
             })
         }
 
-        this.isLoading = true // Set loading state
+        this.isLoading = true
         try {
-            // Corrected: Call the method on the Llama namespace
             this.pleiasContext = await Llama.getRagReasoningLlamaContext()
             if (!this.pleiasContext) {
                 throw new Error(
@@ -38,10 +30,10 @@ export class PleiasRAGLLMWrapper implements LLM {
             console.log('[PleiasRAGLLMWrapper] Pleias-RAG-350M model loaded successfully.')
         } catch (error) {
             console.error('[PleiasRAGLLMWrapper] Error loading Pleias-RAG-350M model:', error)
-            this.pleiasContext = null // Clear context on error
-            throw error // Re-throw to propagate the error
+            this.pleiasContext = null
+            throw error
         } finally {
-            this.isLoading = false // Reset loading state
+            this.isLoading = false
         }
         return this
     }
@@ -53,7 +45,7 @@ export class PleiasRAGLLMWrapper implements LLM {
 
     async generate(messages: Message[], callback: (token: string) => void): Promise<string> {
         if (!this.pleiasContext) {
-            await this.load() // Fallback: Ensure loaded before generating
+            await this.load()
             if (!this.pleiasContext)
                 throw new Error('Pleias RAG model failed to load or is not available.')
         }
@@ -65,9 +57,9 @@ export class PleiasRAGLLMWrapper implements LLM {
             prompt: fullPrompt,
             onToken: (token: string) => {
                 generatedText += token
-                callback(token) // Stream tokens back to react-native-rag
+                callback(token)
             },
-            // Add any other llama.rn parameters needed for Pleias (e.g., temperature, max_tokens)
+            // Add other parameters like temperature, max_tokens here if needed
         })
 
         return generatedText
@@ -75,7 +67,6 @@ export class PleiasRAGLLMWrapper implements LLM {
 
     async interrupt(): Promise<void> {
         if (this.pleiasContext) {
-            // Corrected: Use the stopCompletion method from llama.rn context
             await this.pleiasContext.stopCompletion()
             console.log('[PleiasRAGLLMWrapper] Generation interrupt requested.')
         }

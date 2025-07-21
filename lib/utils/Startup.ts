@@ -19,59 +19,80 @@ import { z } from 'zod'
 import { AppDirectory } from './File'
 import { lockScreenOrientation } from './Screen'
 import { AppSettings, AppSettingsDefault, Global } from '../constants/GlobalValues'
-import { useLlama } from '../engine/Local/LlamaLocal'   // Corrected import
+import { useLlama } from '../engine/Local/LlamaLocal'   // useLlama for state management
 import { Characters } from '../state/Characters'
 import { Chats } from '../state/Chat'
 import { Logger } from '../state/Logger'
 import { mmkv } from '../storage/MMKV'
 import { Theme } from '../theme/ThemeManager'
+import { useEngineData } from '../state/EngineData' // <--- Added this import, assuming it's missing if you're not seeing it from previous outputs
 
-export const loadChatOnInit = async () => {
-    if (!mmkv.getBoolean(AppSettings.ChatOnStartup)) return
-    const newestChat = await Chats.db.query.chatNewest()
-    if (!newestChat) return
-    await Characters.useCharacterCard.getState().setCard(newestChat.character_id)
-    await Chats.useChatState.getState().load(newestChat.id)
-    router.push('/screens/ChatMenu')
+export const loadChatOnInit = async (): Promise<void> => {
+    try {
+        if (!mmkv.getBoolean(AppSettings.ChatOnStartup)) return
+        const newestChat = await Chats.db.query.chatNewest()
+        if (!newestChat) return
+        await Characters.useCharacterCard.getState().setCard(newestChat.character_id)
+        await Chats.useChatState.getState().load(newestChat.id)
+        router.push('/screens/ChatMenu')
+    } catch (error) {
+        Logger.error('Failed to load chat on init: ' + (error as Error).message)
+    }
 }
 
-const setAppDefaultSettings = () => {
-    Object.keys(AppSettingsDefault).map((item) => {
-        const data = mmkv.getBoolean(item)
-        if (data !== undefined) return
+const setAppDefaultSettings = (): void => {
+    Object.keys(AppSettingsDefault).forEach((item) => {
+        if (mmkv.getBoolean(item) !== undefined) return
+
         if (item === AppSettings.UnlockOrientation) {
-            getDeviceTypeAsync().then((result) => {
-                mmkv.set(item, result === DeviceType.TABLET)
-            })
-        } else mmkv.set(item, AppSettingsDefault[item as AppSettings])
+            getDeviceTypeAsync()
+                .then((result) => {
+                    mmkv.set(item, result === DeviceType.TABLET)
+                })
+                .catch((err) => {
+                    Logger.error('Failed to get device type: ' + err.message)
+                })
+        } else {
+            mmkv.set(item, AppSettingsDefault[item as AppSettings])
+        }
     })
 }
 
-const createDefaultCard = async () => {
-    if (!mmkv.getBoolean(AppSettings.CreateDefaultCard)) return
-    const result = await Characters.db.query.cardList('character')
-    if (result.length === 0) await Characters.createDefaultCard()
-    mmkv.set(AppSettings.CreateDefaultCard, false)
+const createDefaultCard = async (): Promise<void> => {
+    try {
+        if (!mmkv.getBoolean(AppSettings.CreateDefaultCard)) return
+        const existingCards = await Characters.db.query.cardList('character')
+        if (existingCards.length === 0) {
+            await Characters.createDefaultCard()
+        }
+        mmkv.set(AppSettings.CreateDefaultCard, false)
+    } catch (error) {
+        Logger.error('Failed to create default card: ' + (error as Error).message)
+    }
 }
 
-const setCPUFeatures = async () => {
-    if (mmkv.getString(Global.CpuFeatures)) return
-    const result = getCpuFeatures()
-    mmkv.set(Global.CpuFeatures, JSON.stringify(result))
+const setCPUFeatures = async (): Promise<void> => {
+    try {
+        if (mmkv.getString(Global.CpuFeatures)) return
+        const features = getCpuFeatures()
+        mmkv.set(Global.CpuFeatures, JSON.stringify(features))
+    } catch (error) {
+        Logger.error('Failed to set CPU features: ' + (error as Error).message)
+    }
 }
 
-const migrateModelData_0_7_10_to_0_8_0 = () => {
+const migrateModelData_0_7_10_to_0_8_0 = (): void => {
     const oldDef = `localmodel`
     try {
-        const model = mmkv.getString(oldDef)
-        if (model) JSON.parse(model)
-    } catch (e) {
+        const modelRaw = mmkv.getString(oldDef)
+        if (modelRaw) JSON.parse(modelRaw)
+    } catch {
         Logger.warn('Model could not be parsed, resetting')
         mmkv.delete(oldDef)
     }
 }
 
-const migrateModelData_0_8_4_to_0_8_5 = () => {
+const migrateModelData_0_8_4_to_0_8_5 = (): void => {
     const oldDef = `localmodel`
     try {
         const modelData = mmkv.getString(oldDef)
@@ -80,21 +101,26 @@ const migrateModelData_0_8_4_to_0_8_5 = () => {
         if (!data) return
         mmkv.delete(oldDef)
 
-        useLlama.getState().setLastModelLoaded(data) // Updated useLlama usage (comment integrated)
-    } catch (e) {}
+        // Fix: Changed back to useEngineData as 'setLastModelLoaded' is on that store
+        useEngineData.getState().setLastModelLoaded(data) 
+    } catch (error) {
+        Logger.error('Failed migrating model data from 0.8.4 to 0.8.5: ' + (error as Error).message)
+    }
 }
 
-const migrateTTSData_0_8_5_to_0_8_6 = () => {
-    if (mmkv.getBoolean('ttsauto')) {
-        mmkv.delete('ttsauto')
-        useTTSState.getState().setAuto(true)
-    }
-    if (mmkv.getBoolean('ttsenable')) {
-        mmkv.delete('ttsenable')
-        useTTSState.getState().setEnabled(true)
-    }
-    const speakerData = mmkv.getString('ttsspeaker')
-    if (speakerData) {
+const migrateTTSData_0_8_5_to_0_8_6 = (): void => {
+    try {
+        if (mmkv.getBoolean('ttsauto')) {
+            mmkv.delete('ttsauto')
+            useTTSState.getState().setAuto(true)
+        }
+        if (mmkv.getBoolean('ttsenable')) {
+            mmkv.delete('ttsenable')
+            useTTSState.getState().setEnabled(true)
+        }
+        const speakerData = mmkv.getString('ttsspeaker')
+        if (!speakerData) return
+
         mmkv.delete('ttsspeaker')
         try {
             const voiceData = JSON.parse(speakerData)
@@ -107,89 +133,118 @@ const migrateTTSData_0_8_5_to_0_8_6 = () => {
             const result = voiceSchema.safeParse(voiceData)
             if (result.success) {
                 useTTSState.getState().setVoice(voiceData)
-            } else throw new Error('Schema validation failed')
-        } catch (e) {
-            Logger.error('Failed to migrate voice from 0.8.5 to 0.8.6')
+            } else {
+                throw new Error('Schema validation failed')
+            }
+        } catch {
+            Logger.error('Failed to migrate voice from 0.8.5 to 0.8.6 due to schema validation')
         }
+    } catch (error) {
+        Logger.error('Failed migrating TTS data from 0.8.5 to 0.8.6: ' + (error as Error).message)
     }
 }
 
-export const generateDefaultDirectories = async () => {
-    Object.values(AppDirectory).map(async (dir) => {
-        await makeDirectoryAsync(`${dir}`, {})
-            .then(() =>
+export const generateDefaultDirectories = async (): Promise<void> => {
+    await Promise.all(
+        Object.values(AppDirectory).map(async (dir) => {
+            try {
+                await makeDirectoryAsync(dir)
                 Logger.info(
-                    `Successfully made directory: ${dir.replace(`${documentDirectory}`, '')}`
+                    // Fix: Added non-null assertion '!' to documentDirectory
+                    `Successfully made directory: ${dir.replace(documentDirectory!, '')}`
                 )
-            )
-            .catch(() => {})
-    })
+            } catch {
+                // Ignoring mkdir errors silently as before
+            }
+        })
+    )
 }
 
-const migratePresets_0_8_3_to_0_8_4 = async () => {
+const migratePresets_0_8_3_to_0_8_4 = async (): Promise<void> => {
     const presetDir = `${documentDirectory}presets`
-    const files = await readDirectoryAsync(presetDir)
-    if (files.length === 0) return
+    try {
+        const files = await readDirectoryAsync(presetDir)
+        if (files.length === 0) return
 
-    files.map(async (item) => {
-        try {
-            const data = await readAsStringAsync(`${presetDir}/${item}`)
-            SamplersManager.useSamplerState.getState().addSamplerConfig({
-                data: JSON.parse(data),
-                name: item.replace('.json', ''),
+        await Promise.all(
+            files.map(async (item) => {
+                try {
+                    const dataStr = await readAsStringAsync(`${presetDir}/${item}`)
+                    SamplersManager.useSamplerState.getState().addSamplerConfig({
+                        data: JSON.parse(dataStr),
+                        name: item.replace('.json', ''),
+                    })
+                } catch (innerError) {
+                    Logger.error(`Failed to migrate preset ${item}: ${(innerError as Error).message}`)
+                }
             })
-        } catch (e) {
-            Logger.error(`Failed to migrate preset ${item}: ${e}`)
-        }
-    })
-    await deleteAsync(presetDir)
-}
-
-const migrateAppMode_0_8_5_to_0_8_6 = () => {
-    const oldKey = 'appmode'
-    const oldAppMode = mmkv.getString(oldKey)
-    if (!oldAppMode) return
-
-    if (oldAppMode === 'local' || oldAppMode === 'remote') {
-        useAppModeState.getState().setAppMode(oldAppMode)
-    }
-    mmkv.delete(oldKey)
-    Logger.warn('Migrated appmode from 0.8.5 to 0.8.6')
-}
-
-const createDefaultUserData = async () => {
-    const id = await Characters.db.mutate.createCard('User', 'user')
-
-    Characters.useUserCard.getState().setCard(id)  // Corrected to set new id here
-}
-
-const setDefaultCharacter = async () => {
-    const userList = await Characters.db.query.cardList('user')
-    if (!userList) {
-        Logger.error(
-            'User database is Invalid, this should not happen! Please report this occurrence.'
         )
-    } else if (userList.length === 0) {
-        Logger.warn('No Users exist, creating default Users')
-        await createDefaultUserData()
-    } else if (userList.length > 0 && !Characters.useUserCard.getState().card) {
-        Characters.useUserCard.getState().setCard(userList[0]!.id) // With non-null assertion as requested
+        await deleteAsync(presetDir)
+    } catch (error) {
+        Logger.error('Failed to migrate presets from 0.8.3 to 0.8.4: ' + (error as Error).message)
     }
 }
 
-const setDefaultInstruct = () => {
-    Instructs.db.query.instructList().then(async (list) => {
-        if (!list) {
-            Logger.error('Instruct database Invalid, this should not happen! Please report this!')
-        } else if (list?.length === 0) {
-            Logger.warn('No Instructs exist, creating default Instruct')
-            const id = await Instructs.generateInitialDefaults()
-            Instructs.useInstruct.getState().load(id)
+const migrateAppMode_0_8_5_to_0_8_6 = (): void => {
+    try {
+        const oldKey = 'appmode'
+        const oldAppMode = mmkv.getString(oldKey)
+        if (!oldAppMode) return
+
+        if (oldAppMode === 'local' || oldAppMode === 'remote') {
+            useAppModeState.getState().setAppMode(oldAppMode)
         }
-    })
+        mmkv.delete(oldKey)
+        Logger.warn('Migrated appmode from 0.8.5 to 0.8.6')
+    } catch (error) {
+        Logger.error('Failed migrating app mode from 0.8.5 to 0.8.6: ' + (error as Error).message)
+    }
 }
 
-export const startupApp = () => {
+const createDefaultUserData = async (): Promise<void> => {
+    try {
+        const id = await Characters.db.mutate.createCard('User', 'user')
+        Characters.useUserCard.getState().setCard(id)
+    } catch (error) {
+        Logger.error('Failed creating default user data: ' + (error as Error).message)
+    }
+}
+
+const setDefaultCharacter = async (): Promise<void> => {
+    try {
+        const userList = await Characters.db.query.cardList('user')
+        if (!userList) {
+            Logger.error(
+                'User database is Invalid, this should not happen! Please report this occurrence.'
+            )
+            return
+        }
+        if (userList.length === 0) {
+            Logger.warn('No Users exist, creating default Users')
+            await createDefaultUserData()
+        } else if (userList.length > 0 && !Characters.useUserCard.getState().card) {
+            Characters.useUserCard.getState().setCard(userList[0]!.id) // safe non-null assertion as requested
+        }
+    } catch (error) {
+        Logger.error('Failed to set default character: ' + (error as Error).message)
+    }
+}
+
+const setDefaultInstruct = (): void => {
+    Instructs.db.query.instructList()
+        .then(async (list) => {
+            if (!list) {
+                Logger.error('Instruct database Invalid, this should not happen! Please report this!')
+            } else if (list.length === 0) {
+                Logger.warn('No Instructs exist, creating default Instruct')
+                const id = await Instructs.generateInitialDefaults()
+                Instructs.useInstruct.getState().load(id)
+            }
+        })
+        .catch((error) => Logger.error('Failed loading default instructs: ' + error.message))
+}
+
+export const startupApp = (): void => {
     console.log('[APP STARTED]: T1APT')
 
     setAppDefaultSettings()
@@ -208,6 +263,9 @@ export const startupApp = () => {
     migrateAppMode_0_8_5_to_0_8_6()
 
     lockScreenOrientation()
-    setBackgroundColorAsync(Theme.useColorState.getState().color.neutral._100)
+    setBackgroundColorAsync(Theme.useColorState.getState().color.neutral._100).catch(() => {
+        Logger.warn('Failed to set background color on startup')
+    })
+
     Logger.info('Resetting state values for startup.')
 }

@@ -296,7 +296,8 @@ export const pickStringDocument = async ({
             return { success: false }
         }
 
-        const asset = result.assets[0]
+        // FIX: Add non-null assertion '!' to asset
+        const asset = result.assets[0]! 
         // Explicitly check if asset.uri is present before using it
         if (!asset.uri) return { success: false }
 

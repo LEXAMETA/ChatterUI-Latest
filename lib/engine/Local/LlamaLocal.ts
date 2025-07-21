@@ -70,6 +70,56 @@ function textTimings(timings: CompletionTimings): string {
   )
 }
 
+// In lib/engine/Local/LlamaLocal.ts, add this function:
+export async function getEmbeddingLlamaContext(): Promise<LlamaContext | null> {
+    const engineDataState = useEngineData.getState();
+    // Assuming engineDataState.config.embeddingModelId is where the ID for the embedding model is stored
+    const embeddingModelId = engineDataState.config.embeddingModelId;
+
+    if (!embeddingModelId) {
+        Logger.warn('No embedding model ID configured in EngineData. Cannot load embedding context.');
+        return null;
+    }
+
+    const model = await fetchModelById(embeddingModelId);
+    if (!model) {
+        reportModelError('Embedding Model', `Configured embedding model with ID ${embeddingModelId} not found.`);
+        return null;
+    }
+
+    // Check if the embedding context is already loaded and is the correct model
+    if (embeddingLlamaContext && loadedEmbeddingModel?.id === model.id && loadedEmbeddingLoRAPath === null) {
+        Logger.info('Embedding Llama Context already loaded.');
+        return embeddingLlamaContext;
+    }
+
+    // Release existing embedding context if it's different or needs reloading
+    if (embeddingLlamaContext) {
+        await embeddingLlamaContext.release();
+        embeddingLlamaContext = null; // Clear old context
+    }
+
+    const config: ContextParams = {
+        model: model.file_path,
+        ...defaultConfig,
+        embedding: true, // IMPORTANT: Enable embedding functionality for this context
+    };
+
+    const newContext = await createLlamaContext(config);
+
+    if (newContext) {
+        embeddingLlamaContext = newContext;
+        loadedEmbeddingModel = model;
+        loadedEmbeddingLoRAPath = null; // Assuming no LoRA for embedding models
+        Logger.info(`Loaded Embedding Model: ${model.name}`);
+    } else {
+        reportModelError('Embedding Model', `Failed to create Llama Context for embedding model: ${model.name}`);
+    }
+
+    return newContext;
+}
+
+
 export type LlamaState = {
   currentChatContext: LlamaContext | undefined
   currentChatModel: ModelDataType | undefined
@@ -263,7 +313,7 @@ export const useLlama = create<LlamaState>()((set, get) => ({
 
 export type { LlamaContext, CompletionTimings }
 
-async function getLlamaContextForPurpose(
+export async function getLlamaContextForPurpose(
   options: LoadContextOptions
 ): Promise<LlamaContext | null> {
   const { modelId, expectedType, currentContext, loadedModel, isEmbeddingModel, loraPath, config } = options
@@ -308,4 +358,3 @@ async function getLlamaContextForPurpose(
 
   return await createLlamaContext(params)
 }
-

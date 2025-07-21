@@ -102,13 +102,10 @@ export namespace SamplersManager {
                     () => mmkvStorage
                 ) as PersistStorage<PersistedSamplerState>,
                 version: 1,
-                // --- FIX STARTS HERE ---
-                // Explicitly type the 'state' parameter of the partialize function
                 partialize: (state: SamplerStateProps) => ({
                     configList: state.configList,
                     currentConfigIndex: state.currentConfigIndex,
                 }),
-                // --- FIX ENDS HERE ---
                 migrate: async (persistedState: unknown, version: number): Promise<void> => {},
             } as unknown as PersistOptions<SamplerStateProps, PersistedSamplerState>
         )
@@ -146,7 +143,7 @@ export namespace SamplersManager {
 
     export const getCurrentSampler = () => {
         const state = useSamplerState.getState()
-        return state.configList[state.currentConfigIndex].data
+        return state.configList[state.currentConfigIndex]!.data
     }
 
     export const importConfigFile = async (): Promise<SamplerConfig | undefined> => {
@@ -159,7 +156,7 @@ export namespace SamplersManager {
                     !result.assets[0].name.endsWith('.settings'))
             ) {
                 Logger.errorToast(`Invalid File Type! Please select a .json or .settings file.`)
-                return
+                return undefined
             }
             const name = result.assets[0].name
                 .replace('.json', '')
@@ -174,6 +171,7 @@ export namespace SamplersManager {
             Logger.errorToast(
                 `Failed to import configuration: ${e instanceof Error ? e.message : e}`
             )
+            return undefined
         }
     }
 }

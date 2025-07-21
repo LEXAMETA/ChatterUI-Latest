@@ -1,21 +1,28 @@
 // lib/rag/QwenLlamaRNEngine.ts
+
 import { LlamaContext } from 'cui-llama.rn'
 import { Embeddings } from 'react-native-rag'
 
-import { Llama } from '../engine/Local/LlamaLocal' // Correct: Import the Llama namespace
+import { getEmbeddingLlamaContext } from '../engine/Local/LlamaLocal'
+
+
+// FIX: Locally augment the LlamaContext interface to include the 'embedding' method
+// This tells TypeScript that LlamaContext objects *will* have this method at runtime.
+interface LlamaContextWithEmbedding extends LlamaContext {
+    embedding(content: string): Promise<{ embedding: number[] }>;
+}
 
 export class QwenLlamaRNEngine implements Embeddings {
-    private embeddingContext: LlamaContext | null = null
-    private isLoading: boolean = false // Added: State to prevent race conditions
+    // Change type to the augmented interface
+    private embeddingContext: LlamaContextWithEmbedding | null = null
+    private isLoading: boolean = false
 
     async load(): Promise<this> {
         if (this.embeddingContext && !this.isLoading) {
             console.log('[QwenLlamaRNEngine] Model already loaded or is loading. Skipping load.')
-            return this // Already loaded or in progress
+            return this
         }
         if (this.isLoading) {
-            // If already loading, wait for it to complete. This is a simple retry.
-            // For production, consider a more robust promise queue.
             console.log('[QwenLlamaRNEngine] Model is currently loading, waiting...')
             return new Promise((resolve) => {
                 const interval = setInterval(() => {
@@ -27,10 +34,11 @@ export class QwenLlamaRNEngine implements Embeddings {
             })
         }
 
-        this.isLoading = true // Set loading state
+        this.isLoading = true
         try {
-            // Corrected: Call the method on the Llama namespace
-            this.embeddingContext = await Llama.getEmbeddingLlamaContext()
+            // FIX: Ensure Llama.getEmbeddingLlamaContext() returns a context capable of embeddings.
+            // (Assuming this method internally calls initLlama with `embedding: true`)
+            this.embeddingContext = await (getEmbeddingLlamaContext() as Promise<LlamaContextWithEmbedding>);
             if (!this.embeddingContext) {
                 throw new Error(
                     'Failed to get Qwen Embedding Llama Context. Is the model selected in settings?'
@@ -39,46 +47,38 @@ export class QwenLlamaRNEngine implements Embeddings {
             console.log('[QwenLlamaRNEngine] Qwen3-Embedding model loaded successfully.')
         } catch (error) {
             console.error('[QwenLlamaRNEngine] Error loading Qwen3-Embedding model:', error)
-            this.embeddingContext = null // Clear context on error
-            throw error // Re-throw to propagate the error
+            this.embeddingContext = null
+            throw error
         } finally {
-            this.isLoading = false // Reset loading state
+            this.isLoading = false
         }
         return this
     }
 
     async unload(): Promise<void> {
-        // Llama.rn contexts are managed by LlamaLocal, so we primarily clear our local reference.
-        // If a true "unload" from memory is needed, that would be handled in LlamaLocal.ts
-        // via a dispose method on the LlamaContext itself if llama.rn exposes it.
         this.embeddingContext = null
         console.log('[QwenLlamaRNEngine] Qwen3-Embedding context reference released.')
     }
 
     async embed(text: string): Promise<number[]> {
         if (!this.embeddingContext) {
-            // Fallback: Try to load if not already. Ideally, load() is called explicitly by the RAG system.
             await this.load()
             if (!this.embeddingContext)
                 throw new Error('Qwen Embedding model failed to load or is not available.')
         }
-        // Qwen recommends <|endoftext|> and 'query:' prefix for queries
-        const { embedding } = await this.embeddingContext.embedding({
-            text: `query: ${text}<|endoftext|>`,
-        })
+        // FIX: Pass the string directly, not an object
+        const { embedding } = await this.embeddingContext.embedding(`query: ${text}<|endoftext|>`)
         return embedding
     }
 
-    // For documents, it might be just text<|endoftext|> without 'query:' prefix
     async embedDocument(text: string): Promise<number[]> {
         if (!this.embeddingContext) {
-            await this.load() // Fallback: Try to load if not already.
+            await this.load()
             if (!this.embeddingContext)
                 throw new Error('Qwen Embedding model failed to load or is not available.')
         }
-        const { embedding } = await this.embeddingContext.embedding({
-            text: `${text}<|endoftext|>`,
-        })
+        // FIX: Pass the string directly, not an object
+        const { embedding } = await this.embeddingContext.embedding(`${text}<|endoftext|>`)
         return embedding
     }
 }

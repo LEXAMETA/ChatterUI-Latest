@@ -18,7 +18,8 @@ export const replaceMacros = (text: string) => {
         { macro: '{{char}}', value: charName },
         { macro: '{{time}}', value: time.toLocaleTimeString() },
         { macro: '{{date}}', value: time.toLocaleDateString() },
-        { macro: '{{weekday}}', value: weekday[time.getDay()] },
+        // FIX: Add non-null assertion '!' here
+        { macro: '{{weekday}}', value: weekday[time.getDay()]! },
     ]
     for (const rule of rules) newtext = newtext.replaceAll(rule.macro, rule.value)
     return newtext

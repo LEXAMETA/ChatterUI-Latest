@@ -91,7 +91,7 @@ useInference.subscribe(({ nowGenerating }) => {
         if (!message || !message.swipes || !message.swipes[message.swipe_id]) return
         useTTSState
             .getState()
-            .handleEndGeneration(length - 1, message.swipes[message.swipe_id].swipe)
+            .handleEndGeneration(length - 1, message.swipes[message.swipe_id]!.swipe)
     } else {
         useTTSState.getState().handleStartGeneration(length - 1)
     }

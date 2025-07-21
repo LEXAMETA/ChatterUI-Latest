@@ -132,6 +132,10 @@ function signed_crc_table() {
 
 const T0 = signed_crc_table()
 
+// THIS IS THE CORRECTLY ADDED LINE
+const TT = slice_by_16_tables(T0)
+
+
 function slice_by_16_tables(T: Int32Array) {
     let c = 0
     let v = 0
@@ -248,4 +252,3 @@ const utf8Decode = (bytes: Uint8Array): string => {
 
     return string
 }
-
