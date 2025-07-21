@@ -1,12 +1,12 @@
 import Alert from '@components/views/Alert'
 import Avatar from '@components/views/Avatar'
 import Drawer from '@components/views/Drawer'
-import PopupMenu from '@components/views/PopupMenu' // Import PopupMenu
-import { PopupMenuHandle } from '@components/views/PopupMenu' // <--- Import PopupMenuHandle here
+import PopupMenu from '@components/views/PopupMenu'
+import { PopupMenuHandle } from '@components/views/PopupMenu'
 import { Characters } from '@lib/state/Characters'
 import { Theme } from '@lib/theme/ThemeManager'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Menu } from 'react-native-popup-menu' // Keep if used elsewhere
+import { Menu } from 'react-native-popup-menu'
 
 type CharacterData = Awaited<ReturnType<typeof Characters.db.query.cardListQuery>>[0]
 
@@ -58,7 +58,8 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
                             }
                             // list has at least one item here:
                             if (userId && list.some((item) => item.id === userId)) return
-                            setCard(list[0].id)
+                            // FIX: Add non-null assertion for list[0]
+                            setCard(list[0]!.id)
                         })
                     },
                     type: 'warning',

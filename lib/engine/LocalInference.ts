@@ -12,7 +12,8 @@ import { CompletionTimings } from 'db/schema'
 
 import { APIConfiguration, APISampler, APIValues } from './API/APIBuilder.types'
 import { buildChatCompletionContext, buildTextCompletionContext } from './API/ContextBuilder'
-import { Llama, LlamaConfig } from './Local/LlamaLocal'
+import { useLlama } from './Local/LlamaLocal' // Keep this import for the useLlama store
+import { useEngineData, EngineConfig } from '@lib/state/EngineData' // Corrected import path using @lib alias
 import { KV } from './Local/Model'
 
 export const localSamplerData: APISampler[] = [
@@ -58,62 +59,12 @@ const getSamplerFields = (max_length?: number) => {
         .reduce((acc, obj) => Object.assign(acc, obj), {})
 }
 
-const buildLocalPayload = async () => {
-    const payloadFields = getSamplerFields()
-    const rep_pen = payloadFields?.['penalty_repeat']
-    const n_predict =
-        (typeof payloadFields?.['n_predict'] === 'number' && payloadFields?.['n_predict']) || 0
-    const localPreset: LlamaConfig = Llama.useEngineData.getState().config
-
-    let prompt: undefined | string = undefined
-
-    if (mmkv.getBoolean(AppSettings.UseModelTemplate)) {
-        const messages = buildChatCompletionContext(
-            localPreset.context_length - n_predict,
-            localAPIConfig,
-            localAPIValues
-        )
-        try {
-            if (messages) {
-                const result = await Llama.useLlama
-                    .getState()
-                    .context?.getFormattedChat(messages, null, { jinja: true })
-                if (typeof result === 'string') prompt = result
-                // Currently not used since we dont pass in { jinja: true }
-                else if (typeof result === 'object') prompt = result.prompt
-            }
-        } catch (e) {
-            Logger.error(`Failed to use template: ${e}`)
-        }
-    }
-    if (!prompt) {
-        prompt = buildTextCompletionContext(localPreset.context_length - n_predict)
-    }
-
-    if (!prompt) {
-        Logger.errorToast('Failed to build prompt')
-    }
-
-    return {
-        ...payloadFields,
-        penalize_nl: typeof rep_pen === 'number' && rep_pen > 1,
-        n_threads: localPreset.threads,
-        prompt: prompt ?? '',
-        stop: constructStopSequence(),
-        emit_partial_completion: true,
-    }
-}
-
 const constructStopSequence = (): string[] => {
     const instruct = Instructs.useInstruct.getState().replacedMacros()
     const sequence: string[] = []
     if (instruct.stop_sequence !== '')
         instruct.stop_sequence.split(',').forEach((item) => item !== '' && sequence.push(item))
     return sequence
-}
-
-const stopGenerating = () => {
-    Chats.useChatState.getState().stopGenerating()
 }
 
 const constructReplaceStrings = (): string[] => {
@@ -132,42 +83,85 @@ const constructReplaceStrings = (): string[] => {
     return [...stops, ...output]
 }
 
-const verifyModelLoaded = async (): Promise<boolean> => {
-    const model = Llama.useLlama.getState().model
+const stopGenerating = () => {
+    Chats.useChatState.getState().stopGenerating()
+}
 
-    // Model Loading Routine
+const buildLocalPayload = async () => {
+    const payloadFields = getSamplerFields()
+    const rep_pen = payloadFields?.['penalty_repeat']
+    const n_predict =
+        (typeof payloadFields?.['n_predict'] === 'number' && payloadFields?.['n_predict']) || 0
+    const localPreset: EngineConfig = useEngineData.getState().config
+
+    let prompt: undefined | string = undefined
+
+    if (mmkv.getBoolean(AppSettings.UseModelTemplate)) {
+        const messages = buildChatCompletionContext(
+            localPreset.n_ctx - n_predict, // Correct: Use n_ctx from EngineConfig
+            localAPIConfig,
+            localAPIValues
+        )
+        try {
+            if (messages) {
+                const result = await useLlama
+                    .getState()
+                    .currentChatContext?.getFormattedChat(messages, null, { jinja: true })
+                if (typeof result === 'string') prompt = result
+                else if (typeof result === 'object') prompt = result.prompt
+            }
+        } catch (e) {
+            Logger.error(`Failed to use template: ${e}`)
+        }
+    }
+    if (!prompt) {
+        prompt = buildTextCompletionContext(localPreset.n_ctx - n_predict) // Correct: Use n_ctx from EngineConfig
+    }
+
+    if (!prompt) {
+        Logger.errorToast('Failed to build prompt')
+    }
+
+    return {
+        ...payloadFields,
+        penalize_nl: typeof rep_pen === 'number' && rep_pen > 1,
+        n_threads: localPreset.n_threads, // FIX: Changed `threads` to `n_threads`
+        prompt: prompt ?? '',
+        stop: constructStopSequence(),
+        emit_partial_completion: true,
+    }
+}
+
+const verifyModelLoaded = async (): Promise<boolean> => {
+    const model = useLlama.getState().currentChatModel
+
     if (!model) {
-        const lastModel = Llama.useEngineData.getState().lastModel
+        const lastModel = useEngineData.getState().lastModelLoaded
         const autoLoad = mmkv.getBoolean(AppSettings.AutoLoadLocal)
-        // If  autoload is disabled, just return
         if (!autoLoad) {
             Logger.warnToast('No Model Loaded')
             return false
         }
 
-        // by default, autoload will attempt to load the last model used
         if (!lastModel) {
             Logger.warnToast('No Auto-Load Model Set')
             return false
         }
 
-        // attempt to load model
         if (lastModel) {
             Logger.infoToast(`Auto-loading: ${lastModel.name}`)
-            await Llama.useLlama.getState().load(lastModel)
+            await useLlama.getState().loadCurrentChatModel(lastModel)
         }
     }
     return true
 }
 
 export const localInference = async () => {
-    // Model Loading Routine
     if (!(await verifyModelLoaded())) {
         return stopGenerating()
     }
 
-    // verify that model has been loaded
-    const context = Llama.useLlama.getState().context
+    const context = useLlama.getState().currentChatContext
 
     if (!context) {
         Logger.warnToast('No Model Loaded')
@@ -184,7 +178,7 @@ export const localInference = async () => {
     }
 
     if (mmkv.getBoolean(AppSettings.SaveLocalKV) && !KV.useKVState.getState().kvCacheLoaded) {
-        const prompt = Llama.useLlama.getState().tokenize(payload.prompt)
+        const prompt = useLlama.getState().tokenize(payload.prompt)
         const result = KV.useKVState.getState().verifyKVCache(prompt?.tokens ?? [])
         if (!result.match) {
             Alert.alert({
@@ -196,7 +190,7 @@ export const localInference = async () => {
                         label: 'Load Anyway',
                         onPress: async () => {
                             Logger.warn('Overriding KV Cache despite mismatch')
-                            const result = await Llama.useLlama.getState().loadKV()
+                            const result = await useLlama.getState().loadKV()
                             if (result) {
                                 KV.useKVState.getState().setKvCacheLoaded(true)
                             }
@@ -210,7 +204,7 @@ export const localInference = async () => {
             return
         }
 
-        const kvloadResult = await Llama.useLlama.getState().loadKV()
+        const kvloadResult = await useLlama.getState().loadKV()
         if (kvloadResult) {
             KV.useKVState.getState().setKvCacheLoaded(true)
         }
@@ -227,7 +221,7 @@ const runLocalCompletion = async (payload: Awaited<ReturnType<typeof buildLocalP
     )
 
     useInference.getState().setAbort(async () => {
-        await Llama.useLlama.getState().stopCompletion()
+        await useLlama.getState().stopCompletion()
     })
 
     const outputStream = (text: string) => {
@@ -244,10 +238,10 @@ const runLocalCompletion = async (payload: Awaited<ReturnType<typeof buildLocalP
         stopGenerating()
     }
 
-    await Llama.useLlama
+    await useLlama
         .getState()
         .completion(payload, outputStream, outputCompleted)
-        .catch((error) => {
+        .catch((error: unknown) => {
             Logger.errorToast(`Failed to generate locally: ${error}`)
             stopGenerating()
         })
@@ -263,7 +257,6 @@ const localAPIValues: APIValues = {
     configName: 'Local',
 }
 
-// This is a dummy we use to hijack chat completions builder
 const localAPIConfig: APIConfiguration = {
     version: 1,
     name: 'Local',

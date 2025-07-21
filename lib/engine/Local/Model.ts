@@ -16,6 +16,17 @@ import { GGMLNameMap, GGMLType } from './GGML'
 
 export type ModelData = Omit<ModelDataType, 'id' | 'create_date' | 'last_modified' | 'model_type'>
 
+// Add this interface to define the structure of modelInfo.metadata
+interface ModelMetadata {
+  'general.architecture': string;
+  'general.name': string;
+  'general.size_label': string;
+  'general.file_type': string;
+  // Use an index signature for dynamic properties like `${modelArchitecture}.context_length`
+  [key: string]: string | number; // This allows any string key, with a value of string or number
+}
+
+
 export namespace Model {
   export const getModelList = async () => {
     return await readDirectoryAsync(AppDirectory.ModelPath)
@@ -166,17 +177,19 @@ export namespace Model {
 
       const modelContext = await initLlama({ model: file_path, vocab_only: true })
 
-      const modelInfo = modelContext.model
-      const modelArchitecture = modelInfo.metadata?.['general.architecture']
+      // Cast modelInfo.metadata to the new interface
+      const modelInfoMetadata = modelContext.model.metadata as ModelMetadata;
+
+      const modelArchitecture = modelInfoMetadata['general.architecture'];
 
       const modelDataEntry: Omit<ModelDataType, 'id' | 'create_date' | 'last_modified'> = {
-        context_length: modelInfo.metadata?.[`${modelArchitecture}.context_length`] ?? 0,
+        context_length: (modelInfoMetadata[`${modelArchitecture}.context_length`] as number) ?? 0,
         file: filename,
         file_path,
-        name: modelInfo.metadata?.['general.name'] ?? 'N/A',
-        file_size: modelInfo.size ?? 0,
-        params: modelInfo.metadata?.['general.size_label'] ?? 'N/A',
-        quantization: modelInfo.metadata?.['general.file_type'] ?? '-1',
+        name: modelInfoMetadata['general.name'] ?? 'N/A',
+        file_size: modelContext.model.size ?? 0, // modelInfo.size is directly accessible
+        params: modelInfoMetadata['general.size_label'] ?? 'N/A',
+        quantization: modelInfoMetadata['general.file_type'] ?? '-1',
         architecture: modelArchitecture ?? 'N/A',
         model_type: modelType,
       }

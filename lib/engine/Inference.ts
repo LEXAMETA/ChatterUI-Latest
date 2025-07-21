@@ -9,25 +9,53 @@ import { localInference } from './LocalInference'
 
 export const regenerateResponse = async (swipeId: number, regenCache: boolean = true) => {
     const charName = Characters.useCharacterCard.getState().card?.name
-    const messagesLength = Chats.useChatState.getState()?.data?.messages?.length ?? -1
+    // Ensure messagesLength is at least 0. If messages is empty, messagesLength will be 0.
+    const messagesLength = Chats.useChatState.getState()?.data?.messages?.length ?? 0
+    // message can correctly be undefined if messagesLength is 0
     const message = Chats.useChatState.getState()?.data?.messages?.[messagesLength - 1]
 
     Logger.info('Regenerate Response' + (regenCache ? '' : ' , Resetting Message'))
 
+    // First, handle the case where the last message is a user message
     if (message?.is_user) {
         await Chats.useChatState.getState().addEntry(charName ?? '', true, '')
-    } else if (messagesLength && messagesLength !== 1) {
+    }
+    // Now handle cases where it's not a user message, or there are no messages (messagesLength <= 0)
+    // The condition `messagesLength && messagesLength !== 1` means:
+    // - If messagesLength is 0, it's false.
+    // - If messagesLength is 1, it means the *only* message is at index 0. If that's a user message, it's handled above.
+    //   If it's not a user message (e.g., first bot response), we might still want to regenerate.
+    //   Let's adjust this to ensure we have a valid `message` to work with for regeneration.
+    else if (message && messagesLength > 0) { // Ensure 'message' exists and there are messages
         let replacement = ''
 
-        if (regenCache) replacement = message?.swipes[message.swipe_id].regen_cache ?? ''
-        else Chats.useChatState.getState().resetRegenCache()
+        if (regenCache) {
+            // Now that 'message' is guaranteed to be defined within this block,
+            // we can safely access its properties, using optional chaining for 'swipes'
+            // and then checking if the specific swipe entry exists.
+            const swipeEntry = message.swipes?.[message.swipe_id];
 
-        if (replacement) Chats.useChatState.getState().setBuffer({ data: replacement })
+            if (swipeEntry) {
+                replacement = swipeEntry.regen_cache ?? '';
+            } else {
+                // This branch means regenCache was true, but the swipe data was missing or invalid.
+                // In this case, we still need to reset the regen cache.
+                Chats.useChatState.getState().resetRegenCache();
+                Logger.warn('Regen cache requested but specific swipe data missing or invalid.');
+            }
+        } else {
+            // If regenCache is false, always reset the cache
+            Chats.useChatState.getState().resetRegenCache();
+        }
+
+        if (replacement) {
+            Chats.useChatState.getState().setBuffer({ data: replacement });
+        }
         await Chats.useChatState.getState().updateEntry(messagesLength - 1, replacement, {
             updateFinished: true,
             updateStarted: true,
             resetTimings: true,
-        })
+        });
     }
     await generateResponse(swipeId)
 }

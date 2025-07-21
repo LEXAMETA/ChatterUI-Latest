@@ -4,7 +4,8 @@ import { db } from '@db'
 import { Storage } from '@lib/enums/Storage'
 import { AppDirectory as FileAppDirectory, readableFileSize } from '@lib/utils/File'
 
-import { ContextParams, LlamaContext, initLlama, CompletionParams, CompletionTimings } from 'cui-llama.rn'
+// Removed CompletionTimings from cui-llama.rn import
+import { ContextParams, LlamaContext, initLlama, CompletionParams } from 'cui-llama.rn'
 import { model_data, ModelDataType } from 'db/schema'
 import { eq } from 'drizzle-orm'
 import * as FileSystem from 'expo-file-system'
@@ -22,6 +23,11 @@ import { useEngineData } from '../../state/EngineData'
 import { fetchModelById, validateLoRAFile, createLlamaContext, LoadContextOptions } from '../utils/ModelContextUtils'
 import { reportModelError } from '../utils/LoggerUtils'
 
+// Import CompletionTimings from db/schema, assuming it's correctly defined there
+// If it's not defined in db/schema, you might need to create a global type or import it from somewhere else.
+// For now, I'll assume it's correctly imported from db/schema if needed for the completed callback.
+import { CompletionTimings } from 'db/schema' // Assuming this is where it actually resides or is re-exported
+
 export const AppDirectory = {
   ModelPath: `${FileSystem.documentDirectory}models/`,
   SessionPath: `${FileSystem.documentDirectory}sessions/`,
@@ -35,6 +41,11 @@ const defaultConfig: Partial<ContextParams> = {
   n_threads: 4,
   n_gpu_layers: 0,
   n_batch: 512,
+}
+
+// Extend ContextParams to include lora_path if it's supported by the native library
+interface ExtendedContextParams extends ContextParams {
+  lora_path?: string; // Add lora_path here
 }
 
 let embeddingLlamaContext: LlamaContext | null = null
@@ -73,7 +84,8 @@ function textTimings(timings: CompletionTimings): string {
 // --- Your existing getEmbeddingLlamaContext function ---
 export async function getEmbeddingLlamaContext(): Promise<LlamaContext | null> {
   const engineDataState = useEngineData.getState()
-  const embeddingModelId = engineDataState.config.embeddingModelId
+  // FIX: Access embeddingModelId directly from engineDataState, not config
+  const embeddingModelId = engineDataState.embeddingModelId
 
   if (!embeddingModelId) {
     Logger.warn('No embedding model ID configured in EngineData. Cannot load embedding context.')
@@ -97,7 +109,7 @@ export async function getEmbeddingLlamaContext(): Promise<LlamaContext | null> {
     embeddingLlamaContext = null
   }
 
-  const config: ContextParams = {
+  const config: ExtendedContextParams = { // Use ExtendedContextParams here
     model: model.file_path,
     ...defaultConfig,
     embedding: true, // Enable embedding support
@@ -120,7 +132,8 @@ export async function getEmbeddingLlamaContext(): Promise<LlamaContext | null> {
 // --- New getRagReasoningLlamaContext function ---
 export async function getRagReasoningLlamaContext(): Promise<LlamaContext | null> {
   const engineDataState = useEngineData.getState()
-  const ragModelId = engineDataState.config.ragModelId
+  // FIX: Access ragReasoningModelId directly from engineDataState, not config
+  const ragModelId = engineDataState.ragReasoningModelId
 
   if (!ragModelId) {
     Logger.warn('No RAG reasoning model ID configured in EngineData. Cannot load RAG reasoning context.')
@@ -149,7 +162,7 @@ export async function getRagReasoningLlamaContext(): Promise<LlamaContext | null
     ragReasoningLlamaContext = null
   }
 
-  const config: ContextParams = {
+  const config: ExtendedContextParams = { // Use ExtendedContextParams here
     model: model.file_path,
     ...defaultConfig,
     // No embedding: this is for reasoning
@@ -365,7 +378,9 @@ export const useLlama = create<LlamaState>()((set, get) => ({
   },
 }))
 
-export type { LlamaContext, CompletionTimings }
+// Make sure CompletionTimings is exported if other files need to import it from here.
+// But as per the error, it's not from cui-llama.rn, so it should be imported from db/schema.
+export type { LlamaContext } // CompletionTimings is handled by db/schema import
 
 export async function getLlamaContextForPurpose(
   options: LoadContextOptions
@@ -400,16 +415,17 @@ export async function getLlamaContextForPurpose(
     await currentContext.release()
   }
 
-  let params: ContextParams = {
+  // Use ExtendedContextParams for params
+  let params: ExtendedContextParams = {
     model: dbModel.file_path,
     ...defaultConfig,
     ...config,
-  } as ContextParams
+  } as ExtendedContextParams // Cast to ExtendedContextParams
 
   if (loraPath && (await validateLoRAFile(loraPath))) {
+    // This property now exists on ExtendedContextParams
     params.lora_path = loraPath
   }
 
   return await createLlamaContext(params)
 }
-
