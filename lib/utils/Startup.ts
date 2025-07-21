@@ -19,7 +19,7 @@ import { z } from 'zod'
 import { AppDirectory } from './File'
 import { lockScreenOrientation } from './Screen'
 import { AppSettings, AppSettingsDefault, Global } from '../constants/GlobalValues'
-import { useLlama } from '../engine/Local/LlamaLocal'   // <-- Changed here
+import { useLlama } from '../engine/Local/LlamaLocal'   // Corrected import
 import { Characters } from '../state/Characters'
 import { Chats } from '../state/Chat'
 import { Logger } from '../state/Logger'
@@ -79,7 +79,8 @@ const migrateModelData_0_8_4_to_0_8_5 = () => {
         const data = JSON.parse(modelData)
         if (!data) return
         mmkv.delete(oldDef)
-        useLlama.useEngineData.getState().setLastModelLoaded(data)  // Updated useLlama usage
+
+        useLlama.getState().setLastModelLoaded(data) // Updated useLlama usage (comment integrated)
     } catch (e) {}
 }
 
@@ -158,20 +159,21 @@ const migrateAppMode_0_8_5_to_0_8_6 = () => {
 
 const createDefaultUserData = async () => {
     const id = await Characters.db.mutate.createCard('User', 'user')
-    Characters.useUserCard.getState().setCard(id)
+
+    Characters.useUserCard.getState().setCard(id)  // Corrected to set new id here
 }
 
 const setDefaultCharacter = async () => {
     const userList = await Characters.db.query.cardList('user')
     if (!userList) {
         Logger.error(
-            'User database is Invalid, this should not happen! Please report this occurence.'
+            'User database is Invalid, this should not happen! Please report this occurrence.'
         )
     } else if (userList.length === 0) {
         Logger.warn('No Users exist, creating default Users')
         await createDefaultUserData()
     } else if (userList.length > 0 && !Characters.useUserCard.getState().card) {
-        Characters.useUserCard.getState().setCard(userList[0].id)  // Safe access now
+        Characters.useUserCard.getState().setCard(userList[0]!.id) // With non-null assertion as requested
     }
 }
 

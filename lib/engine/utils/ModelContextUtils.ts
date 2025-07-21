@@ -5,8 +5,9 @@ import { model_data, ModelDataType } from 'db/schema';
 import { eq } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system';
 import { ContextParams, LlamaContext, initLlama } from 'cui-llama.rn';
-import { Logger } from '../../state/Logger'; // Assuming Logger path
-import { checkGGMLDeprecated } from '../Local/GGML'; // Assuming GGML path
+// FIX: Correct path to Logger (assuming file move)
+import { Logger } from '../../state/Logger';
+import { checkGGMLDeprecated } from '../Local/GGML';
 
 /**
  * Fetches a model from the database by its ID.
@@ -67,5 +68,6 @@ export interface LoadContextOptions {
   loadedModel: ModelDataType | null;
   isEmbeddingModel?: boolean; // Useful for internal logic if embedding/reasoning models have slightly different handling
   loraPath?: string | null;
-  config: ContextParams; // Use ContextParams from cui-llama.rn, avoid 'any'
+  // FIX 4: Now expects the subset of ContextParams that doesn't include 'model'
+  config: Omit<ContextParams, 'model'>;
 }

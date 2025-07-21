@@ -27,7 +27,11 @@ const detectFormat = (input: string): Formats => {
             const asteriskContent = asteriskMatches[1]
             if (asteriskContent) {
                 const quoteMatchesInAsterisk = asteriskContent.match(/"([^"]*)"/)
-                if (quoteMatchesInAsterisk && quoteMatchesInAsterisk[1].split(' ').length > 1) {
+                if (
+                    quoteMatchesInAsterisk &&
+                    quoteMatchesInAsterisk[1] !== undefined &&
+                    quoteMatchesInAsterisk[1].split(' ').length > 1
+                ) {
                     return Formats.AsteriskActionQuoteSpeech
                 }
             }
@@ -153,6 +157,6 @@ export const convertToFormat = (input: string, targetFormat: Formats) => {
 
 export const convertToFormatInstruct = (input: string) => {
     const formatType = Instructs.useInstruct.getState().data?.format_type
-    if (!formatType || formatType === 0) return input
+    if (!formatType || formatType === Formats.None) return input
     return convertToFormat(input, formatType)
 }
