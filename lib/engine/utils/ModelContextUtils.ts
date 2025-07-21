@@ -5,9 +5,8 @@ import { model_data, ModelDataType } from 'db/schema';
 import { eq } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system';
 import { ContextParams, LlamaContext, initLlama } from 'cui-llama.rn';
-// FIX: Correct path to Logger (assuming file move)
-import { Logger } from '../../state/Logger';
-import { checkGGMLDeprecated } from '../Local/GGML';
+import { Logger } from '../../state/Logger'; // FIX: Correct path to Logger
+import { checkGGMLDeprecated, GGMLType, getGGMLTypeFromFile } from '../Local/GGML'; // <--- UPDATED IMPORT
 
 /**
  * Fetches a model from the database by its ID.
@@ -17,6 +16,7 @@ import { checkGGMLDeprecated } from '../Local/GGML';
 export async function fetchModelById(modelId: number) {
   return db.query.model_data.findFirst({ where: eq(model_data.id, modelId) });
 }
+
 
 /**
  * Validates if a given LoRA file path exists and checks for deprecation warnings.
@@ -34,9 +34,15 @@ export async function validateLoRAFile(loRAPath: string): Promise<boolean> {
     }
     // Check for GGML deprecation status for the LoRA file itself
     // Note: checkGGMLDeprecated expects a path, ensure loRAPath is a valid local path, not 'file://' prefixed
-    if (await checkGGMLDeprecated(loRAPath)) {
+
+    // <--- NEW LOGIC HERE --->
+    const ggmlType = await getGGMLTypeFromFile(loRAPath); // Get the numeric GGMLType from the file
+
+    if (ggmlType !== GGMLType.UNKNOWN && checkGGMLDeprecated(ggmlType)) { // Pass the numeric type
       Logger.warn('The LoRA file format is deprecated.');
     }
+    // <--- END NEW LOGIC --->
+
     return true;
   } catch (error) {
     Logger.error(`Error validating LoRA file ${loRAPath}: ${error}`);

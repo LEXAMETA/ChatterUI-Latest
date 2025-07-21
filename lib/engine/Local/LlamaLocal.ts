@@ -70,55 +70,106 @@ function textTimings(timings: CompletionTimings): string {
   )
 }
 
-// In lib/engine/Local/LlamaLocal.ts, add this function:
+// --- Your existing getEmbeddingLlamaContext function ---
 export async function getEmbeddingLlamaContext(): Promise<LlamaContext | null> {
-    const engineDataState = useEngineData.getState();
-    // Assuming engineDataState.config.embeddingModelId is where the ID for the embedding model is stored
-    const embeddingModelId = engineDataState.config.embeddingModelId;
+  const engineDataState = useEngineData.getState()
+  const embeddingModelId = engineDataState.config.embeddingModelId
 
-    if (!embeddingModelId) {
-        Logger.warn('No embedding model ID configured in EngineData. Cannot load embedding context.');
-        return null;
-    }
+  if (!embeddingModelId) {
+    Logger.warn('No embedding model ID configured in EngineData. Cannot load embedding context.')
+    return null
+  }
 
-    const model = await fetchModelById(embeddingModelId);
-    if (!model) {
-        reportModelError('Embedding Model', `Configured embedding model with ID ${embeddingModelId} not found.`);
-        return null;
-    }
+  const model = await fetchModelById(embeddingModelId)
+  if (!model) {
+    reportModelError('Embedding Model', `Configured embedding model with ID ${embeddingModelId} not found.`)
+    return null
+  }
 
-    // Check if the embedding context is already loaded and is the correct model
-    if (embeddingLlamaContext && loadedEmbeddingModel?.id === model.id && loadedEmbeddingLoRAPath === null) {
-        Logger.info('Embedding Llama Context already loaded.');
-        return embeddingLlamaContext;
-    }
+  // Return cached if matches
+  if (embeddingLlamaContext && loadedEmbeddingModel?.id === model.id && loadedEmbeddingLoRAPath === null) {
+    Logger.info('Embedding Llama Context already loaded.')
+    return embeddingLlamaContext
+  }
 
-    // Release existing embedding context if it's different or needs reloading
-    if (embeddingLlamaContext) {
-        await embeddingLlamaContext.release();
-        embeddingLlamaContext = null; // Clear old context
-    }
+  if (embeddingLlamaContext) {
+    await embeddingLlamaContext.release()
+    embeddingLlamaContext = null
+  }
 
-    const config: ContextParams = {
-        model: model.file_path,
-        ...defaultConfig,
-        embedding: true, // IMPORTANT: Enable embedding functionality for this context
-    };
+  const config: ContextParams = {
+    model: model.file_path,
+    ...defaultConfig,
+    embedding: true, // Enable embedding support
+  }
 
-    const newContext = await createLlamaContext(config);
+  const newContext = await createLlamaContext(config)
 
-    if (newContext) {
-        embeddingLlamaContext = newContext;
-        loadedEmbeddingModel = model;
-        loadedEmbeddingLoRAPath = null; // Assuming no LoRA for embedding models
-        Logger.info(`Loaded Embedding Model: ${model.name}`);
-    } else {
-        reportModelError('Embedding Model', `Failed to create Llama Context for embedding model: ${model.name}`);
-    }
+  if (newContext) {
+    embeddingLlamaContext = newContext
+    loadedEmbeddingModel = model
+    loadedEmbeddingLoRAPath = null
+    Logger.info(`Loaded Embedding Model: ${model.name}`)
+  } else {
+    reportModelError('Embedding Model', `Failed to create Llama Context for embedding model: ${model.name}`)
+  }
 
-    return newContext;
+  return newContext
 }
 
+// --- New getRagReasoningLlamaContext function ---
+export async function getRagReasoningLlamaContext(): Promise<LlamaContext | null> {
+  const engineDataState = useEngineData.getState()
+  const ragModelId = engineDataState.config.ragModelId
+
+  if (!ragModelId) {
+    Logger.warn('No RAG reasoning model ID configured in EngineData. Cannot load RAG reasoning context.')
+    return null
+  }
+
+  const model = await fetchModelById(ragModelId)
+  if (!model) {
+    reportModelError('RAG Reasoning Model', `Configured RAG reasoning model with ID ${ragModelId} not found.`)
+    return null
+  }
+
+  // Return cached if matches and no LoRA
+  if (
+    ragReasoningLlamaContext &&
+    loadedRagReasoningModel?.id === model.id &&
+    loadedRagReasoningLoRAPath === null
+  ) {
+    Logger.info('RAG Reasoning Llama Context already loaded.')
+    return ragReasoningLlamaContext
+  }
+
+  // Release old context if exists
+  if (ragReasoningLlamaContext) {
+    await ragReasoningLlamaContext.release()
+    ragReasoningLlamaContext = null
+  }
+
+  const config: ContextParams = {
+    model: model.file_path,
+    ...defaultConfig,
+    // No embedding: this is for reasoning
+  }
+
+  const newContext = await createLlamaContext(config)
+
+  if (newContext) {
+    ragReasoningLlamaContext = newContext
+    loadedRagReasoningModel = model
+    loadedRagReasoningLoRAPath = null
+    Logger.info(`Loaded RAG Reasoning Model: ${model.name}`)
+  } else {
+    reportModelError('RAG Reasoning Model', `Failed to create Llama Context for RAG reasoning model: ${model.name}`)
+  }
+
+  return newContext
+}
+
+// --- Your existing Zustand store and functions ---
 
 export type LlamaState = {
   currentChatContext: LlamaContext | undefined
@@ -174,7 +225,10 @@ export const useLlama = create<LlamaState>()((set, get) => ({
     }
 
     if (model.model_type !== 'main_chat') {
-      reportModelError('Main Chat Model', `Tried to load non-main_chat model as chat model: ${model.name} (${model.model_type})`)
+      reportModelError(
+        'Main Chat Model',
+        `Tried to load non-main_chat model as chat model: ${model.name} (${model.model_type})`
+      )
       return false
     }
 
@@ -358,3 +412,4 @@ export async function getLlamaContextForPurpose(
 
   return await createLlamaContext(params)
 }
+
