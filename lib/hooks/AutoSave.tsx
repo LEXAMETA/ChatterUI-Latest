@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, JSX } from 'react'
+import React, { useRef, useEffect, useState, JSX } from 'react'
 
 export interface CommonProps<TData, TReturn> {
     /** The controlled form value to be auto saved */
@@ -29,6 +29,7 @@ function useDebounce<TData>(data: TData, interval: number) {
                 clearTimeout(handler)
             }
         }
+        // explicit void return for TS
     }, [data, interval])
 
     return liveData
@@ -39,7 +40,7 @@ function useAutosave<TData, TReturn>({
     onSave,
     interval = 2000,
     saveOnUnmount = true,
-}: CommonProps<TData, TReturn>) {
+}: CommonProps<TData, TReturn>): void {
     const valueOnCleanup = useRef(data)
     const initialRender = useRef(true)
     const handleSave = useRef(onSave)
@@ -49,13 +50,12 @@ function useAutosave<TData, TReturn>({
     useEffect(() => {
         if (initialRender.current) {
             initialRender.current = false
-        } else {
-            const callSave = async () => {
-                // Changed line
-                await handleSave.current(debouncedValueToSave)
-            }
-            callSave()
+            return
         }
+        const callSave = async () => {
+            await handleSave.current(debouncedValueToSave)
+        }
+        callSave()
     }, [debouncedValueToSave])
 
     useEffect(() => {
@@ -70,7 +70,6 @@ function useAutosave<TData, TReturn>({
         return () => {
             if (saveOnUnmount) {
                 const callSave = async () => {
-                    // Changed line
                     await handleSave.current(valueOnCleanup.current)
                 }
                 callSave()

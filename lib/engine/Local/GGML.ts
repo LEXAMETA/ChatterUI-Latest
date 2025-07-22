@@ -118,10 +118,11 @@ function readUInt32LE(bytes: Uint8Array, offset: number): number {
             `[GGML] Insufficient data to read 32-bit integer at offset ${offset}. Array length: ${bytes.length}`
         )
     }
-    const b0 = bytes[offset]
-    const b1 = bytes[offset + 1]
-    const b2 = bytes[offset + 2]
-    const b3 = bytes[offset + 3]
+    // Provide default 0 to prevent 'possibly undefined' error
+    const b0 = bytes[offset] ?? 0
+    const b1 = bytes[offset + 1] ?? 0
+    const b2 = bytes[offset + 2] ?? 0
+    const b3 = bytes[offset + 3] ?? 0
 
     return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0
 }

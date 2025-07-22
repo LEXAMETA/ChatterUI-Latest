@@ -30,15 +30,16 @@ export async function pickFile(
         })
 
         if (result.canceled) {
-            Logger?.info('File picking cancelled.') || console.log('File picking cancelled.')
+            Logger?.info('File picking cancelled.')
+            console.log('File picking cancelled.')
             return null
         }
 
         if (Array.isArray(result.assets) && result.assets.length > 0) {
             const asset = result.assets[0]
             if (!asset) {
-                Logger?.warn('No asset found in document picker result array.') ||
-                    console.warn('No asset found in document picker result array.')
+                Logger?.warn('No asset found in document picker result array.')
+                console.warn('No asset found in document picker result array.')
                 return null
             }
             return {
@@ -48,12 +49,13 @@ export async function pickFile(
                 size: asset.size ?? null,
             }
         } else {
-            Logger?.info('File picking completed, but no file selected (empty assets array).') ||
-                console.log('File picking completed, but no file selected (empty assets array).')
+            Logger?.info('File picking completed, but no file selected (empty assets array).')
+            console.log('File picking completed, but no file selected (empty assets array).')
             return null
         }
     } catch (error) {
-        Logger?.error('Error picking file:', error) || console.error('Error picking file:', error)
+        Logger?.error('Error picking file:', error)
+        console.error('Error picking file:', error)
         return null
     }
 }
@@ -65,8 +67,8 @@ export async function readFileContent(
     try {
         return await FileSystem.readAsStringAsync(uri, { encoding })
     } catch (error) {
-        Logger?.error('Error reading file content from URI:', uri, error) ||
-            console.error('Error reading file content from URI:', uri, error)
+        Logger?.error('Error reading file content from URI:', uri, error)
+        console.error('Error reading file content from URI:', uri, error)
         return null
     }
 }
@@ -75,8 +77,8 @@ export async function readBinaryFile(uri: string): Promise<string | null> {
     try {
         return uri
     } catch (error) {
-        Logger?.error('Error reading binary file:', error) ||
-            console.error('Error reading binary file:', error)
+        Logger?.error('Error reading binary file:', error)
+        console.error('Error reading binary file:', error)
         return null
     }
 }
@@ -102,13 +104,13 @@ export async function copyFileToAppDirectory(
             to: destinationPath,
         })
 
-        Logger?.info(`File copied from ${sourceUri} to ${destinationPath}`) ||
-            console.log(`File copied from ${sourceUri} to ${destinationPath}`)
+        Logger?.info(`File copied from ${sourceUri} to ${destinationPath}`)
+        console.log(`File copied from ${sourceUri} to ${destinationPath}`)
 
         return destinationPath
     } catch (error) {
-        Logger?.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error) ||
-            console.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error)
+        Logger?.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error)
+        console.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error)
         return null
     }
 }
@@ -120,8 +122,8 @@ export async function fileExistsInAppDirectory(fileName: string): Promise<boolea
         const fileInfo = await FileSystem.getInfoAsync(`${appDir}${fileName}`)
         return !!fileInfo.exists
     } catch (error) {
-        Logger?.error(`Error checking if file exists: ${fileName}`, error) ||
-            console.error(`Error checking if file exists: ${fileName}`, error)
+        Logger?.error(`Error checking if file exists: ${fileName}`, error)
+        console.error(`Error checking if file exists: ${fileName}`, error)
         return false
     }
 }
@@ -137,7 +139,8 @@ export const saveStringToDownload = async (
         })
         await localDownload(FileSystem.cacheDirectory?.replace('file://', '') + filename)
     } catch (e) {
-        Logger?.error('Failed to download: ' + e) || console.error('Failed to download: ' + e)
+        Logger?.error('Failed to download: ' + e)
+        console.error('Failed to download: ' + e)
     }
 }
 
@@ -152,7 +155,8 @@ export const pickJSONDocument = async (multiple = false): Promise<JSONPickerResu
         const jsonData = JSON.parse(result.data)
         return { success: true, data: jsonData }
     } catch {
-        Logger?.error('Failed to parse JSON data') || console.error('Failed to parse JSON data')
+        Logger?.error('Failed to parse JSON data')
+        console.error('Failed to parse JSON data')
         return { success: false }
     }
 }
@@ -176,15 +180,16 @@ export const pickStringDocument = async ({
         if (!asset.uri) return { success: false }
 
         const data = await FileSystem.readAsStringAsync(asset.uri, { encoding }).catch((e) => {
-            Logger?.info(`Failed to read file: ${e}`) || console.log(`Failed to read file: ${e}`)
+            Logger?.info(`Failed to read file: ${e}`)
+            console.log(`Failed to read file: ${e}`)
             return null
         })
 
         if (data === null) return { success: false }
         return { success: true, data }
     } catch (error) {
-        Logger?.error('Error picking string document:', error) ||
-            console.error('Error picking string document:', error)
+        Logger?.error('Error picking string document:', error)
+        console.error('Error picking string document:', error)
         return { success: false }
     }
 }

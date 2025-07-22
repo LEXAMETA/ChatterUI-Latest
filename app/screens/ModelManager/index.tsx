@@ -4,14 +4,12 @@ import ThemedButton from '@components/buttons/ThemedButton'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
 import { AntDesign } from '@expo/vector-icons'
-// FIX 1: Import useLlama and LlamaState directly
 import { useLlama, LlamaState } from '@lib/engine/Local/LlamaLocal'
 import { Model } from '@lib/engine/Local/Model'
-// FIX 3: Import useEngineData and EngineDataState directly
 import { useEngineData, EngineDataState } from '@lib/state/EngineData'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useState, Dispatch, SetStateAction } from 'react'
+import { useState, Dispatch, SetStateAction, useCallback } from 'react'
 import { StyleSheet, Text, View, FlatList } from 'react-native'
 import * as Progress from 'react-native-progress'
 import Animated, { Easing, SlideInLeft, SlideOutLeft } from 'react-native-reanimated'
@@ -32,12 +30,11 @@ const ModelManager = () => {
     const [modelLoading, setModelLoading] = useState(false)
     const [modelImporting, setModelImporting] = useState(false)
 
-    // FIX 2: Use useLlama directly and type 'state', and ensure correct return types for selected functions
     const {
         currentChatModel,
         loadProgress,
         setloadProgress,
-        loadCurrentChatModel, // This will now correctly be Promise<boolean>
+        loadCurrentChatModel,
         unloadCurrentChatModel,
     } = useLlama((state: LlamaState) => ({
         currentChatModel: state.currentChatModel,
@@ -47,14 +44,49 @@ const ModelManager = () => {
         unloadCurrentChatModel: state.unloadCurrentChatModel,
     }))
 
-    // Get RAG model IDs and setters from useEngineData state
-    const { embeddingModelId, ragReasoningModelId, setEmbeddingModelId, setRagReasoningModelId } =
-        useEngineData((state: EngineDataState) => ({
-            embeddingModelId: state.embeddingModelId,
-            ragReasoningModelId: state.ragReasoningModelId,
-            setEmbeddingModelId: state.setEmbeddingModelId,
-            setRagReasoningModelId: state.setRagReasoningModelId,
-        }))
+    const {
+        embeddingModelId,
+        ragReasoningModelId,
+        setEmbeddingModelId,
+        setRagReasoningModelId,
+        selectedEmbeddingLoRAUri,
+        selectedReasoningLoRAUri,
+        setSelectedEmbeddingLoRAUri,
+        setSelectedReasoningLoRAUri,
+    } = useEngineData((state: EngineDataState) => ({
+        embeddingModelId: state.embeddingModelId,
+        ragReasoningModelId: state.ragReasoningModelId,
+        setEmbeddingModelId: state.setEmbeddingModelId,
+        setRagReasoningModelId: state.setRagReasoningModelId,
+        selectedEmbeddingLoRAUri: state.selectedEmbeddingLoRAUri,
+        selectedReasoningLoRAUri: state.selectedReasoningLoRAUri,
+        setSelectedEmbeddingLoRAUri: state.setSelectedEmbeddingLoRAUri,
+        setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
+    }))
+
+    const getLoRAUriForModelId = useCallback(
+        (modelId: number | null, context: 'embedding' | 'reasoning') => {
+            if (modelId === null) return null
+            if (context === 'embedding') {
+                return selectedEmbeddingLoRAUri
+            } else if (context === 'reasoning') {
+                return selectedReasoningLoRAUri
+            }
+            return undefined
+        },
+        [selectedEmbeddingLoRAUri, selectedReasoningLoRAUri]
+    )
+
+    const setLoRAUriForModelId = useCallback(
+        (modelId: number, uri: string | null, context: 'embedding' | 'reasoning') => {
+            if (context === 'embedding') {
+                setSelectedEmbeddingLoRAUri(uri)
+            } else if (context === 'reasoning') {
+                setSelectedReasoningLoRAUri(uri)
+            }
+        },
+        [setSelectedEmbeddingLoRAUri, setSelectedReasoningLoRAUri]
+    )
 
     return (
         <View style={styles.mainContainer}>
@@ -162,7 +194,7 @@ const ModelManager = () => {
                                 modelImporting={modelImporting}
                                 // Pass current chat model and its loader/unloader to ModelItem
                                 currentChatModel={currentChatModel}
-                                loadCurrentChatModel={loadCurrentChatModel} // This is now consistent
+                                loadCurrentChatModel={loadCurrentChatModel}
                             />
                         )}
                         keyExtractor={(item) => item.id.toString()}
@@ -173,6 +205,7 @@ const ModelManager = () => {
             )}
 
             {showSettings && (
+                // NEW: Pass the LoRA functions
                 <ModelSettings
                     modelImporting={modelImporting}
                     setModelImporting={setModelImporting}
@@ -184,6 +217,8 @@ const ModelManager = () => {
                     ragReasoningModelId={ragReasoningModelId}
                     setEmbeddingModelId={setEmbeddingModelId}
                     setRagReasoningModelId={setRagReasoningModelId}
+                    getLoRAUriForModelId={getLoRAUriForModelId}
+                    setLoRAUriForModelId={setLoRAUriForModelId}
                 />
             )}
             <ThemedButton
