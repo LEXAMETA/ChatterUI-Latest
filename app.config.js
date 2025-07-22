@@ -44,7 +44,7 @@ module.exports = {
             output: 'static',
             favicon: './assets/images/adaptive-icon.png',
         },
-        
+
         plugins: [
             [
                 'expo-asset',
