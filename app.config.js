@@ -4,7 +4,7 @@ module.exports = {
     expo: {
         name: IS_DEV ? 'ChatterUI-Latest (DEV)' : 'ChatterUI-Latest',
         newArchEnabled: true,
-        slug: 'chatterui-latest',
+        slug: 'chatterui-latest', // Keep slug for Expo
         version: '0.1.0',
         orientation: 'default',
         icon: './assets/images/icon.png',
@@ -18,8 +18,8 @@ module.exports = {
                 tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
-            package: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
-            bundleIdentifier: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
+            // FIX: Remove hyphens and make lowercase
+            bundleIdentifier: IS_DEV ? 'com.chatterui.latest.dev' : 'com.chatterui.latest',
         },
         android: {
             adaptiveIcon: {
@@ -28,7 +28,10 @@ module.exports = {
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
-            package: IS_DEV ? 'ChatterUI-Latest.test' : 'ChatterUI-Latest.test',
+            // FIX: Remove hyphens and make lowercase. Add a conventional prefix like 'com.'
+            package: IS_DEV ? 'com.chatterui.latest.dev' : 'com.chatterui.latest',
+            // Also good practice to ensure versionCode is present, though not explicitly errored here.
+            versionCode: 1, // Add this if not present, or ensure it's an integer
             userInterfaceStyle: 'dark',
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
@@ -41,6 +44,7 @@ module.exports = {
             output: 'static',
             favicon: './assets/images/adaptive-icon.png',
         },
+        
         plugins: [
             [
                 'expo-asset',
