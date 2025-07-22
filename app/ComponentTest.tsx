@@ -29,7 +29,7 @@ const buttonVariants = ['primary', 'secondary', 'tertiary', 'critical', 'disable
 
 const ComponentTest = () => {
     const [selected, setSelected] = useState<(typeof selectorData)[0]>(
-        selectorData[0] || defaultSelectorItem
+        selectorData[0] ?? defaultSelectorItem
     )
     const [selectedM, setSelectedM] = useState<typeof selectorData>([])
     const [slider, setSlider] = useState(0)

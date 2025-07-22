@@ -4,8 +4,7 @@ import Drawer from '@components/views/Drawer'
 import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu'
 import { Characters } from '@lib/state/Characters'
 import { Theme } from '@lib/theme/ThemeManager'
-import React from 'react' // Ensure React is imported
-import { RefObject } from 'react' // Import RefObject
+import React, { RefObject } from 'react' // Combined import of React and RefObject
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Menu } from 'react-native-popup-menu'
 
@@ -127,13 +126,13 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
                         {
                             label: 'Clone',
                             icon: 'copy1',
-                            onPress: handleCloneCard, // This function is already correctly typed
+                            onPress: handleCloneCard,
                         },
                         {
                             label: 'Delete',
                             icon: 'delete',
                             warning: true,
-                            onPress: handleDeleteCard, // This function is already correctly typed
+                            onPress: handleDeleteCard,
                         },
                     ]}
                 />

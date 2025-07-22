@@ -6,8 +6,7 @@ import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // impo
 import { DefaultColorSchemes, ThemeColor } from '@lib/theme/ThemeColor'
 import { Theme } from '@lib/theme/ThemeManager'
 import { pickJSONDocument } from '@lib/utils/File'
-import React from 'react' // Ensure React is imported
-import { RefObject } from 'react' // Import RefObject
+import React, { RefObject } from 'react' // Combined import of React and RefObject
 import { Text, TouchableOpacity, View, FlatList } from 'react-native'
 
 type ColorThemeItemProps = {
@@ -30,7 +29,7 @@ const ColorThemeItem: React.FC<ColorThemeItemProps> = ({ item, index, showDelete
     const handleRemoveColorScheme = (index: number) => {
         Alert.alert({
             title: 'Delete Theme',
-            description: `Are you sure you want to delete ${customColors[index]?.name ?? 'this theme'}? This cannot be undone!`, // Safe access
+            description: `Are you sure you want to delete ${customColors[index]?.name ?? 'this theme'}? This cannot be undone!`,
             buttons: [
                 { label: 'Cancel' },
                 {
@@ -142,12 +141,11 @@ const ColorSelector = () => {
                                 label: 'Import Theme',
                                 icon: 'download',
                                 onPress: (menuRef: RefObject<PopupMenuHandle>) => {
-                                    // FIX: Changed parameter type
                                     pickJSONDocument().then((result) => {
                                         if (!result.success) return
                                         addCustomColor(result.data)
                                     })
-                                    menuRef.current?.close() // FIX: Access .current
+                                    menuRef.current?.close()
                                 },
                             },
                         ]}

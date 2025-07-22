@@ -48,7 +48,7 @@ export const GGMLNameMap: Record<GGMLType, string> = {
     [GGMLType.LLAMA_FTYPE_MOSTLY_F16]: 'F16',
     [GGMLType.LLAMA_FTYPE_MOSTLY_Q4_0]: 'Q4_0',
     [GGMLType.LLAMA_FTYPE_MOSTLY_Q4_1]: 'Q4_1',
-    // [GGMLType.LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16]: 'Q4_1_SOME_F16', // Uncomment if needed
+    // [GGMLType.LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16]: 'Q4_1_SOME_F16',
     // [GGMLType.LLAMA_FTYPE_MOSTLY_Q4_2]: 'Q4_2',
     // [GGMLType.LLAMA_FTYPE_MOSTLY_Q4_3]: 'Q4_3',
     [GGMLType.LLAMA_FTYPE_MOSTLY_Q8_0]: 'Q8_0',
@@ -111,32 +111,23 @@ function base64ToUint8Array(base64: string): Uint8Array {
 
 // Convert 4 bytes of Uint8Array to a uint32 number (little-endian)
 function readUInt32LE(bytes: Uint8Array, offset: number): number {
-    // Add a check to ensure there are enough bytes to read a 32-bit integer
     if (offset + 4 > bytes.length) {
         throw new Error(
             `[GGML] Insufficient data to read 32-bit integer at offset ${offset}. Array length: ${bytes.length}`
         )
     }
+    // Wrap declarations in block to fix no-case-declarations warning
+    {
+        const b0 = bytes[offset]
+        const b1 = bytes[offset + 1]
+        const b2 = bytes[offset + 2]
+        const b3 = bytes[offset + 3]
 
-    // --- FIX START ---
-    // Use the non-null assertion operator (!) on each array access.
-    // This tells TypeScript that you are certain these values will not be undefined
-    // because of the preceding length check.
-    const b0 = bytes[offset]!
-    const b1 = bytes[offset + 1]!
-    const b2 = bytes[offset + 2]!
-    const b3 = bytes[offset + 3]!
-    // --- FIX END ---
-
-    return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0
+        return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0
+    }
 }
 
-/**
- * Reads a GGML model file and attempts to determine its GGMLType from its header.
- * This is a placeholder; actual implementation requires parsing GGML file format details.
- * @param filePath The path to the GGML model file.
- * @returns The determined GGMLType, or GGMLType.UNKNOWN if it cannot be determined or an error occurs.
- */
+// Reads GGML model type from file header (partial header read)
 export async function getGGMLTypeFromFile(filePath: string): Promise<GGMLType> {
     try {
         const fileInfo = await FileSystem.getInfoAsync(filePath)
@@ -145,18 +136,11 @@ export async function getGGMLTypeFromFile(filePath: string): Promise<GGMLType> {
             return GGMLType.UNKNOWN
         }
 
-        // WARNING: This reads the ENTIRE file into memory as Base64.
-        // This is NOT suitable for large model files (GBs in size).
-        // It's a demonstration for smaller files or if a native binary reader isn't an option.
         const base64Content = await FileSystem.readAsStringAsync(filePath, {
             encoding: FileSystem.EncodingType.Base64,
         })
 
-        // Convert only the relevant part of Base64 content to Uint8Array.
-        // We need enough bytes to read the KV count and then start parsing KV pairs.
-        // A typical GGUF header (magic + version + tensor_count + kv_count) is 16 bytes.
-        // The actual ftype (quantization type) is found within the KV metadata.
-        const bytesToRead = 256 // Read a reasonable chunk to find the 'general.architecture' and 'general.file_type' keys
+        const bytesToRead = 256
         const uint8Array = base64ToUint8Array(
             base64Content.substring(0, Math.ceil(bytesToRead / 3) * 4)
         )
@@ -166,15 +150,13 @@ export async function getGGMLTypeFromFile(filePath: string): Promise<GGMLType> {
             return GGMLType.UNKNOWN
         }
 
-        const GGUF_MAGIC = 0x46554747 // 'GGUF' in little-endian ASCII
+        const GGUF_MAGIC = 0x46554747
 
         const magic = readUInt32LE(uint8Array, 0)
         if (magic !== GGUF_MAGIC) {
             console.warn(`[GGML] Not a GGUF file (bad magic number): ${filePath}`)
             return GGMLType.UNKNOWN
         }
-
-        const version = readUInt32LE(uint8Array, 4)
 
         let offset = 8
         const tensorCount = readUInt32LE(uint8Array, offset)
@@ -207,75 +189,80 @@ export async function getGGMLTypeFromFile(filePath: string): Promise<GGMLType> {
 
             let valueSize = 0
             switch (valueType) {
-                case 0:
+                case 0: {
                     valueSize = 1
-                    break // GGUF_TYPE_UINT8
-                case 1:
+                    break
+                }
+                case 1: {
                     valueSize = 1
-                    break // GGUF_TYPE_INT8
-                case 2:
+                    break
+                }
+                case 2: {
                     valueSize = 2
-                    break // GGUF_TYPE_UINT16
-                case 3:
+                    break
+                }
+                case 3: {
                     valueSize = 2
-                    break // GGUF_TYPE_INT16
-                case 4:
+                    break
+                }
+                case 4: {
                     valueSize = 4
-                    break // GGUF_TYPE_UINT32
-                case 5:
+                    break
+                }
+                case 5: {
                     valueSize = 4
-                    break // GGUF_TYPE_INT32
-                case 6:
+                    break
+                }
+                case 6: {
                     valueSize = 8
-                    break // GGUF_TYPE_UINT64
-                case 7:
+                    break
+                }
+                case 7: {
                     valueSize = 8
-                    break // GGUF_TYPE_INT64
-                case 8:
+                    break
+                }
+                case 8: {
                     valueSize = 4
-                    break // GGUF_TYPE_FLOAT32
-                case 9:
+                    break
+                }
+                case 9: {
                     valueSize = 8
-                    break // GGUF_TYPE_FLOAT64
-                case 10:
+                    break
+                }
+                case 10: {
                     valueSize = 1
-                    break // GGUF_TYPE_BOOL
-                case 11: // GGUF_TYPE_STRING - length precedes string
-                    if (offset + 4 > uint8Array.length) {
-                        break
-                    }
+                    break
+                }
+                case 11: {
+                    if (offset + 4 > uint8Array.length) break
                     const stringLength = readUInt32LE(uint8Array, offset)
                     valueSize = 4 + stringLength
                     break
-                case 12: // GGUF_TYPE_ARRAY - length of array precedes elements
-                    if (offset + 4 > uint8Array.length) {
-                        break
-                    }
-                    const arrayLength = readUInt32LE(uint8Array, offset)
-                    // This is a placeholder for array size calculation; actual size depends on element type and count.
-                    // For simplicity, we just skip over the length field.
+                }
+                case 12: {
+                    if (offset + 4 > uint8Array.length) break
+                    // arrayLength usage omitted as in original
                     valueSize = 4
                     break
-                default:
+                }
+                default: {
                     console.warn(
                         `[GGML] Unknown GGUF value type: ${valueType} for key ${key}. Skipping.`
                     )
                     break
+                }
             }
-            if (valueSize === 0) {
-                break // Stop parsing this KV pair if size couldn't be determined safely
-            }
+            if (valueSize === 0) break
 
             if (key === 'general.file_type') {
                 if (offset + valueSize > uint8Array.length) {
                     console.warn(`[GGML] Insufficient data to read 'general.file_type' value.`)
                     break
                 }
-                const fileTypeValue = readUInt32LE(uint8Array, offset) // This is the ggml_ftype!
+                const fileTypeValue = readUInt32LE(uint8Array, offset)
                 return fileTypeValue as GGMLType
             }
-
-            offset += valueSize // Move past the value
+            offset += valueSize
         }
 
         console.warn(`[GGML] 'general.file_type' KV pair not found in header for "${filePath}".`)

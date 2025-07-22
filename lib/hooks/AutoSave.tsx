@@ -29,8 +29,6 @@ function useDebounce<TData>(data: TData, interval: number) {
                 clearTimeout(handler)
             }
         }
-        // Add this line here to ensure all paths return consistently (void/undefined)
-        // This makes the return explicit for the 'else' path
     }, [data, interval])
 
     return liveData
@@ -52,8 +50,10 @@ function useAutosave<TData, TReturn>({
         if (initialRender.current) {
             initialRender.current = false
         } else {
-            // Explicitly discard return value to satisfy TS for void functions
-            void handleSave.current(debouncedValueToSave)
+            async function callSave() {
+                await handleSave.current(debouncedValueToSave)
+            }
+            callSave()
         }
     }, [debouncedValueToSave])
 
@@ -65,14 +65,16 @@ function useAutosave<TData, TReturn>({
         handleSave.current = onSave
     }, [onSave])
 
-    useEffect(
-        () => () => {
+    useEffect(() => {
+        return () => {
             if (saveOnUnmount) {
-                void handleSave.current(valueOnCleanup.current)
+                async function callSave() {
+                    await handleSave.current(valueOnCleanup.current)
+                }
+                callSave()
             }
-        },
-        [saveOnUnmount]
-    )
+        }
+    }, [saveOnUnmount])
 }
 
 export default useAutosave

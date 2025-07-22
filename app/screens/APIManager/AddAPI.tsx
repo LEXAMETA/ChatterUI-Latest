@@ -4,12 +4,12 @@ import DropdownSheet from '@components/input/DropdownSheet'
 import MultiDropdownSheet from '@components/input/MultiDropdownSheet'
 import ThemedTextInput from '@components/input/ThemedTextInput'
 import { CLAUDE_VERSION } from '@lib/constants/GlobalValues'
-import { APIConfiguration } from '@lib/engine/API/APIBuilder.types' // <--- NEW LINE
+import { APIConfiguration } from '@lib/engine/API/APIBuilder.types'
 import { APIManagerValue, APIState } from '@lib/engine/API/APIManagerState'
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 import { Stack, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react' // <--- Add useCallback
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
 const AddAPI = () => {
@@ -20,7 +20,6 @@ const AddAPI = () => {
         addValue: state.addValue,
     }))
 
-    // Make template possibly undefined (or null)
     const [template, setTemplate] = useState<APIConfiguration | undefined>(getTemplates()[0])
 
     const [values, setValues] = useState<APIManagerValue>(
@@ -46,50 +45,65 @@ const AddAPI = () => {
 
     const [modelList, setModelList] = useState<any[]>([])
 
-    const handleGetModelList = async () => {
+    // Wrap handleGetModelList in useCallback
+    const handleGetModelList = useCallback(async () => {
         if (!template) {
             Logger.errorToast('No template selected')
             return
         }
-
         if (!template.features.useModel) return
 
         const auth: any = {}
         if (template.features.useKey) {
+            // These dependencies (template.request.authHeader, template.request.authPrefix, values.key, template.name, CLAUDE_VERSION)
+            // are now implicitly part of useCallback's dependencies due to its closure over the component's scope.
             auth[template.request.authHeader] = template.request.authPrefix + values.key
             if (template.name === 'Claude') {
                 auth['anthropic-version'] = CLAUDE_VERSION
             }
         }
+
         try {
-            const result = await fetch(values.modelEndpoint, { headers: { ...auth } })
+            const result = await fetch(values.modelEndpoint, { headers: { ...auth } }) // values.modelEndpoint is a dependency
             const data = await result.json()
             if (result.status !== 200) {
                 Logger.error(`Could not retrieve models: ${data?.error?.message}`)
                 return
             }
-            const models = getNestedValue(data, template.model.modelListParser)
-            const isArray = Array.isArray(models)
-            if (!models || !isArray) {
+            const models = getNestedValue(data, template.model.modelListParser) // template.model.modelListParser is a dependency
+            if (!Array.isArray(models)) {
                 Logger.warn('Could not parse models!')
-                if (!models) {
-                    Logger.error('Models resulted in an undefined value')
-                } else if (!isArray)
-                    Logger.error(
-                        'Models resulted in a non-array value. `modelListParser` of template is likely incorrect'
-                    )
+                Logger.error(
+                    models === undefined
+                        ? 'Models resulted in undefined value'
+                        : 'Models resulted in a non-array value; modelListParser likely incorrect.'
+                )
                 return
             }
-            setModelList(models)
+            setModelList(models) // setModelList is a dependency
         } catch (e) {
-            Logger.error(`Failed to fetch model list: ${String(e)}`)
+            Logger.error(`Failed to fetch model list: ${String(e)}`) // Logger is a dependency
         }
-    }
+    }, [
+        template, // template is already in the useEffect, and now in useCallback
+        values.key, // Add values.key
+        values.modelEndpoint, // Add values.modelEndpoint
+        // Although getNestedValue, CLAUDE_VERSION, Logger are not directly state/props,
+        // if they are truly stable (e.g., constants, or pure functions defined outside the component),
+        // they don't *strictly* need to be in `useCallback`'s deps for stability,
+        // but ESLint often prefers them there if used.
+        // However, for compiler purposes, the critical ones are `values` and `template` derivatives.
+        // `getNestedValue` is a pure function, so it's fine outside deps.
+        // `Logger` is an object from a module, generally stable.
+        // `CLAUDE_VERSION` is a constant, stable.
+    ])
 
     useEffect(() => {
+        // Remove the eslint-disable-next-line comment
         handleGetModelList()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [template])
+    }, [handleGetModelList]) // Now depend on the stable handleGetModelList
+
+    // ... (rest of your component code)
 
     return (
         <View style={styles.mainContainer}>
@@ -108,7 +122,7 @@ const AddAPI = () => {
                         setModelList([])
                         setValues({
                             ...item.defaultValues,
-                            friendlyName: values.friendlyName,
+                            friendlyName: values.friendlyName, // Make sure `values.friendlyName` is intended here
                             active: true,
                             configName: item.name,
                             model: undefined,
@@ -153,7 +167,7 @@ const AddAPI = () => {
                                       }
                                     : {}
                             }
-                            callback={handleGetModelList}
+                            callback={handleGetModelList} // This is good, it uses the stable callback
                         />
                     </View>
                 )}

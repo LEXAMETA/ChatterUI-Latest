@@ -3,11 +3,8 @@
 import { db } from '@db'
 import { Storage } from '@lib/enums/Storage'
 import { AppDirectory as FileAppDirectory, readableFileSize } from '@lib/utils/File'
-
-// Removed CompletionTimings from cui-llama.rn import (already done, good!)
 import { ContextParams, LlamaContext, initLlama, CompletionParams } from 'cui-llama.rn'
-import { model_data, ModelDataType } from 'db/schema'
-import { CompletionTimings } from 'db/schema' // Confirmed: Assuming this is where it actually resides or is re-exported
+import { model_data, ModelDataType, CompletionTimings } from 'db/schema'
 import { eq } from 'drizzle-orm'
 import * as FileSystem from 'expo-file-system'
 import { getInfoAsync } from 'expo-file-system'
@@ -135,7 +132,6 @@ export const useLlama = create<LlamaState>()((set, get) => ({
 
     setLoadedEmbeddingModelInContext: (model, loraPath = null) => {
         set({ loadedEmbeddingModelInContext: model, loadedEmbeddingLoRAPathInContext: loraPath })
-        // Update the module-level instance if it's being set or cleared
         if (model === null) {
             embeddingLlamaContextInstance = null
         }
@@ -146,7 +142,6 @@ export const useLlama = create<LlamaState>()((set, get) => ({
             loadedRagReasoningModelInContext: model,
             loadedRagReasoningLoRAPathInContext: loraPath,
         })
-        // Update the module-level instance if it's being set or cleared
         if (model === null) {
             ragReasoningLlamaContextInstance = null
         }
@@ -168,7 +163,6 @@ export const useLlama = create<LlamaState>()((set, get) => ({
 
         const config = useEngineData.getState().config
 
-        // Ensure mainChatLlamaContext is released before loading a new one
         if (mainChatLlamaContext) {
             await mainChatLlamaContext.release()
             mainChatLlamaContext = null
@@ -177,8 +171,8 @@ export const useLlama = create<LlamaState>()((set, get) => ({
         const options: LoadContextOptions = {
             modelId: model.id,
             expectedType: 'main_chat',
-            currentContext: null, // Always pass null here as we release it above
-            loadedModel: null, // Always pass null as currentChatModel will be updated later
+            currentContext: null,
+            loadedModel: null,
             loraPath: null,
             config: {
                 model: model.file_path,
@@ -190,11 +184,11 @@ export const useLlama = create<LlamaState>()((set, get) => ({
         const context = await getLlamaContextForPurpose(options)
 
         if (!context) {
-            set({ loadProgress: 0 }) // Reset progress on failure
+            set({ loadProgress: 0 })
             return false
         }
 
-        mainChatLlamaContext = context // Assign to module-level variable
+        mainChatLlamaContext = context
         set({
             currentChatContext: context,
             currentChatModel: model,
@@ -214,7 +208,6 @@ export const useLlama = create<LlamaState>()((set, get) => ({
 
     async unloadCurrentChatModel() {
         if (mainChatLlamaContext) {
-            // Use the module-level instance for unloading
             await mainChatLlamaContext.release()
             mainChatLlamaContext = null
         }
@@ -224,8 +217,6 @@ export const useLlama = create<LlamaState>()((set, get) => ({
             loadProgress: 0,
             chatCount: 0,
         })
-        // No need to check `if (mainChatLlamaContext === get().currentChatContext)`
-        // because currentChatContext is set to undefined above and mainChatLlamaContext is nulled.
     },
 
     async completion(params, callback = () => {}, completed = () => {}) {
@@ -316,7 +307,7 @@ export async function getEmbeddingLlamaContext(
     loraPath: string | null = null
 ): Promise<LlamaContext | null> {
     const engineDataState = useEngineData.getState()
-    const embeddingModelId = engineDataState.embeddingModelId // Get from EngineData state
+    const embeddingModelId = engineDataState.embeddingModelId
 
     if (!embeddingModelId) {
         Logger.warn(
@@ -334,11 +325,10 @@ export async function getEmbeddingLlamaContext(
         return null
     }
 
-    const llamaState = useLlama.getState() // Get LlamaState to check and update context info
+    const llamaState = useLlama.getState()
     const currentLoadedModel = llamaState.loadedEmbeddingModelInContext
     const currentLoadedLoRAPath = llamaState.loadedEmbeddingLoRAPathInContext
 
-    // Check if the current context matches the requested model and LoRA path
     if (
         embeddingLlamaContextInstance &&
         currentLoadedModel?.id === model.id &&
@@ -348,11 +338,10 @@ export async function getEmbeddingLlamaContext(
         return embeddingLlamaContextInstance
     }
 
-    // Release existing context if it's different
     if (embeddingLlamaContextInstance) {
         await embeddingLlamaContextInstance.release()
         embeddingLlamaContextInstance = null
-        llamaState.setLoadedEmbeddingModelInContext(null) // Clear state
+        llamaState.setLoadedEmbeddingModelInContext(null)
     }
 
     const config: ExtendedContextParams = {
@@ -369,7 +358,7 @@ export async function getEmbeddingLlamaContext(
 
     if (newContext) {
         embeddingLlamaContextInstance = newContext
-        llamaState.setLoadedEmbeddingModelInContext(model, loraPath) // Update Zustand state
+        llamaState.setLoadedEmbeddingModelInContext(model, loraPath)
         Logger.info(
             `Loaded Embedding Model: ${model.name}${loraPath ? ` with LoRA: ${loraPath.split('/').pop()}` : ''}`
         )
@@ -387,7 +376,7 @@ export async function getRagReasoningLlamaContext(
     loraPath: string | null = null
 ): Promise<LlamaContext | null> {
     const engineDataState = useEngineData.getState()
-    const ragModelId = engineDataState.ragReasoningModelId // Get from EngineData state
+    const ragModelId = engineDataState.ragReasoningModelId
 
     if (!ragModelId) {
         Logger.warn(
@@ -405,11 +394,10 @@ export async function getRagReasoningLlamaContext(
         return null
     }
 
-    const llamaState = useLlama.getState() // Get LlamaState to check and update context info
+    const llamaState = useLlama.getState()
     const currentLoadedModel = llamaState.loadedRagReasoningModelInContext
     const currentLoadedLoRAPath = llamaState.loadedRagReasoningLoRAPathInContext
 
-    // Check if the current context matches the requested model and LoRA path
     if (
         ragReasoningLlamaContextInstance &&
         currentLoadedModel?.id === model.id &&
@@ -419,11 +407,10 @@ export async function getRagReasoningLlamaContext(
         return ragReasoningLlamaContextInstance
     }
 
-    // Release old context if exists
     if (ragReasoningLlamaContextInstance) {
         await ragReasoningLlamaContextInstance.release()
         ragReasoningLlamaContextInstance = null
-        llamaState.setLoadedRagReasoningModelInContext(null) // Clear state
+        llamaState.setLoadedRagReasoningModelInContext(null)
     }
 
     const config: ExtendedContextParams = {
@@ -439,7 +426,7 @@ export async function getRagReasoningLlamaContext(
 
     if (newContext) {
         ragReasoningLlamaContextInstance = newContext
-        llamaState.setLoadedRagReasoningModelInContext(model, loraPath) // Update Zustand state
+        llamaState.setLoadedRagReasoningModelInContext(model, loraPath)
         Logger.info(
             `Loaded RAG Reasoning Model: ${model.name}${loraPath ? ` with LoRA: ${loraPath.split('/').pop()}` : ''}`
         )
@@ -463,7 +450,7 @@ export async function unloadEmbeddingLlamaContext(): Promise<void> {
             Logger.error(`Error releasing embedding context: ${e.message}`)
         } finally {
             embeddingLlamaContextInstance = null
-            useLlama.getState().setLoadedEmbeddingModelInContext(null) // Clear Zustand state
+            useLlama.getState().setLoadedEmbeddingModelInContext(null)
         }
     } else {
         Logger.info('No embedding Llama context to unload.')
@@ -479,7 +466,7 @@ export async function unloadRagReasoningLlamaContext(): Promise<void> {
             Logger.error(`Error releasing RAG reasoning context: ${e.message}`)
         } finally {
             ragReasoningLlamaContextInstance = null
-            useLlama.getState().setLoadedRagReasoningModelInContext(null) // Clear Zustand state
+            useLlama.getState().setLoadedRagReasoningModelInContext(null)
         }
     } else {
         Logger.info('No RAG Reasoning Llama context to unload.')
@@ -487,8 +474,7 @@ export async function unloadRagReasoningLlamaContext(): Promise<void> {
 }
 
 // Make sure CompletionTimings is exported if other files need to import it from here.
-// But as per the error, it's not from cui-llama.rn, so it should be imported from db/schema.
-export type { LlamaContext } // CompletionTimings is handled by db/schema import
+export type { LlamaContext }
 
 // This function is still needed for main chat context loading, but now it uses
 // the module-level mainChatLlamaContext and useLlama state.
@@ -511,7 +497,6 @@ export async function getLlamaContextForPurpose(
         return null
     }
 
-    // Determine if a reload is needed based on model ID or LoRA path
     const needsReload =
         !currentContext ||
         loadedModel?.id !== dbModel.id ||
@@ -520,25 +505,23 @@ export async function getLlamaContextForPurpose(
         (expectedType === 'rag_reasoning' &&
             loraPath !== useLlama.getState().loadedRagReasoningLoRAPathInContext) ||
         (expectedType === 'main_chat' &&
-            (loadedModel?.id !== dbModel.id || currentContext !== mainChatLlamaContext)) // Check for main chat context specifically
+            (loadedModel?.id !== dbModel.id || currentContext !== mainChatLlamaContext))
 
     if (!needsReload) {
         Logger.info(`${expectedType} Model already loaded correctly.`)
-        return currentContext // Return the existing context
+        return currentContext
     }
 
-    // If a context already exists, release it before creating a new one
     if (currentContext) {
         await currentContext.release()
     }
 
-    // Use ExtendedContextParams for params
     const params: ExtendedContextParams = {
         model: dbModel.file_path,
         ...defaultConfig,
         ...config,
-        embedding: expectedType === 'rag_embedding', // Only enable embedding for embedding models
-    } as ExtendedContextParams // Cast to ExtendedContextParams
+        embedding: expectedType === 'rag_embedding',
+    } as ExtendedContextParams
 
     if (loraPath && (await validateLoRAFile(loraPath))) {
         params.lora_path = loraPath
@@ -546,7 +529,6 @@ export async function getLlamaContextForPurpose(
 
     const newContext = await createLlamaContext(params)
 
-    // Update relevant module-level context and Zustand state for the specific type
     if (newContext) {
         if (expectedType === 'rag_embedding') {
             embeddingLlamaContextInstance = newContext
@@ -554,8 +536,6 @@ export async function getLlamaContextForPurpose(
         } else if (expectedType === 'rag_reasoning') {
             ragReasoningLlamaContextInstance = newContext
             useLlama.getState().setLoadedRagReasoningModelInContext(dbModel, loraPath)
-        } else if (expectedType === 'main_chat') {
-            // This is handled by loadCurrentChatModel already
         }
     }
 

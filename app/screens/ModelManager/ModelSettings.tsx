@@ -5,19 +5,14 @@ import PopupMenu from '@components/views/PopupMenu'
 import AntDesign from '@expo/vector-icons/AntDesign'
 import { AppSettings } from '@lib/constants/GlobalValues'
 import * as LlamaModule from '@lib/engine/Local/LlamaLocal'
-import { LlamaContext } from '@lib/engine/Local/LlamaLocal' // Import LlamaContext type directly from LlamaLocal
-
-// FIX: Changed import path to @lib/constants/GlobalValues
+import { LlamaContext } from '@lib/engine/Local/LlamaLocal'
 import { reportModelError } from '@lib/engine/utils/LoggerUtils'
 import { useEngineData, EngineDataState } from '@lib/state/EngineData'
 import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 import { readableFileSize } from '@lib/utils/File'
 import { useMMKVBoolean } from '@storage/MMKV'
-
-// FIX: Changed import path to @lib/state/Logger
-// This path alias seems correct already based on @lib/*
-import { ModelDataType } from 'db/schema' // ModelDataType is from db/schema
+import { ModelDataType } from 'db/schema'
 import DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system'
 import React, { useEffect, useState, useReducer, Dispatch, SetStateAction } from 'react'
@@ -100,7 +95,7 @@ const useLoRAFiles = (
         let isActive = true
         const loadLoRAs = async () => {
             try {
-                const loraPath = `${LlamaModule.AppDirectory.LoRAPath}` // Use LlamaModule.AppDirectory
+                const loraPath = `${LlamaModule.AppDirectory.LoRAPath}`
                 const info = await FileSystem.getInfoAsync(loraPath)
                 if (!info.exists) {
                     await FileSystem.makeDirectoryAsync(loraPath)
@@ -150,7 +145,7 @@ interface ModelPickerProps {
     onSelectId: (id: number | null) => void
     loadedContextModel: ModelDataType | null | undefined
     disabled: boolean
-    models: ModelDataType[] // NEW: Pass models array as prop
+    models: ModelDataType[]
 }
 
 const ModelPicker: React.FC<ModelPickerProps> = ({
@@ -160,15 +155,13 @@ const ModelPicker: React.FC<ModelPickerProps> = ({
     onSelectId,
     loadedContextModel,
     disabled,
-    models, // Receive models here
+    models,
 }) => {
     const styles = useStyles()
     const { color, spacing } = Theme.useTheme()
-
-    // Filter models based on contextType and exclude the currently loaded one if it's already active
     const filteredModels = React.useMemo(() => {
         return models.filter(
-            (model) => model.model_type === contextType && model.id !== currentModelId // Exclude the currently selected one from the list of options
+            (model) => model.model_type === contextType && model.id !== currentModelId
         )
     }, [models, contextType, currentModelId])
 
@@ -189,7 +182,7 @@ const ModelPicker: React.FC<ModelPickerProps> = ({
                         : [
                               {
                                   label: 'No models of this type available',
-                                  onPress: () => {}, // No-op for disabled option
+                                  onPress: () => {},
                                   icon: PopupIcons.exclamationcircleo,
                               },
                           ]
@@ -285,7 +278,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     modelLoading,
     setModelImporting,
     setModelLoading,
-    models, // Receive models here
+    models,
     embeddingModelId,
     ragReasoningModelId,
     setEmbeddingModelId,
@@ -294,7 +287,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     const styles = useStyles()
     const { color, spacing } = Theme.useTheme()
 
-    // Engine data (LoRA URIs)
     const {
         selectedEmbeddingLoRAUri,
         selectedReasoningLoRAUri,
@@ -307,41 +299,32 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         setSelectedReasoningLoRAUri: state.setSelectedReasoningLoRAUri,
     }))
 
-    // LoRA file management through reducer & effect
     const [{ availableLoRAs, selectedEmbeddingLoRA, selectedReasoningLoRA }, dispatch] =
         useLoRAFiles(selectedEmbeddingLoRAUri, selectedReasoningLoRAUri)
 
-    // Settings toggles
     const [saveLocalKV, setSaveLocalKV] = useMMKVBoolean(AppSettings.SaveLocalKV)
     const [autoLoadLocal, setAutoLoadLocal] = useMMKVBoolean(AppSettings.AutoLoadLocal)
     const [showModelInChat, setShowModelInChat] = useMMKVBoolean(AppSettings.ShowModelInChat)
 
-    // Handle file import with copying
     const handlePickAndCopyFile = async () => {
         if (modelImporting || modelLoading) return
-
         try {
             setModelImporting(true)
             const result = await DocumentPicker.getDocumentAsync({
                 copyToCacheDirectory: false,
             })
-
             if (result.canceled) {
                 setModelImporting(false)
                 return
             }
-
             const file = result.assets?.[0]
             if (!file?.uri || !file?.name) {
                 reportModelError('LoRA Import', 'No valid file selected')
                 setModelImporting(false)
                 return
             }
-
             const targetPath = `${LlamaModule.AppDirectory.LoRAPath}${file.name}`
-
             Logger.infoToast(`Copying lora file...`)
-
             await FileSystem.copyAsync({ from: file.uri, to: targetPath })
             const fileInfo = await FileSystem.getInfoAsync(targetPath)
             if (fileInfo.exists) {
@@ -357,7 +340,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         }
     }
 
-    // Select a LoRA file in reducer and engine data
     const handleSelectFile = (type: ContextType, file: FileEntry | null) => {
         if (type === ContextType.Embedding) {
             dispatch({ type: 'SELECT_EMBEDDING', payload: file })
@@ -368,7 +350,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         }
     }
 
-    // Context loading/unloading functions
     const loadContext = async (contextType: ContextType) => {
         if (modelLoading || modelImporting) return
 
@@ -454,7 +435,6 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         }
     }
 
-    // Get currently loaded RAG models from LlamaLocal's internal state
     const {
         loadedEmbeddingModelInContext: currentEmbeddingContextModel,
         loadedRagReasoningModelInContext: currentReasoningContextModel,

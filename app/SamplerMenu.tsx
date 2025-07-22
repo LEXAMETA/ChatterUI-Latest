@@ -17,8 +17,7 @@ import { Logger } from '@lib/state/Logger'
 import { SamplersManager } from '@lib/state/SamplerState'
 import { Theme } from '@lib/theme/ThemeManager'
 import { saveStringToDownload } from '@lib/utils/File'
-import React, { useState } from 'react' // Ensure React is imported
-import { RefObject } from 'react' // Import RefObject
+import React, { RefObject, useState } from 'react' // Combined import for React, useState, and RefObject
 import { ScrollView, StyleSheet, Text } from 'react-native'
 
 const SamplerMenu = () => {
@@ -113,36 +112,33 @@ const SamplerMenu = () => {
                     label: 'Create Sampler',
                     icon: 'addfile',
                     onPress: (menuRef: RefObject<PopupMenuHandle>) => {
-                        // FIX: Changed parameter type
                         setShowNewSampler(true)
-                        menuRef.current?.close() // FIX: Access .current
+                        menuRef.current?.close()
                     },
                 },
                 {
                     label: 'Export Sampler',
                     icon: 'download',
                     onPress: (menuRef: RefObject<PopupMenuHandle>) => {
-                        // FIX: Changed parameter type
                         handleExportSampler()
-                        menuRef.current?.close() // FIX: Access .current
+                        menuRef.current?.close()
                     },
                 },
                 /*
-        {
-          label: 'Import Sampler',
-          icon: 'upload',
-          onPress: (menuRef: RefObject<PopupMenuHandle>) => { // FIX: Changed parameter type
-            handleImportSampler()
-            menuRef.current?.close() // FIX: Access .current
-          },
-        },
-        */
+                {
+                    label: 'Import Sampler',
+                    icon: 'upload',
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        handleImportSampler()
+                        menuRef.current?.close()
+                    },
+                },
+                */
                 {
                     label: 'Delete Sampler',
                     icon: 'delete',
                     onPress: (menuRef: RefObject<PopupMenuHandle>) => {
-                        // FIX: Changed parameter type
-                        if (handleDeleteSampler()) menuRef.current?.close() // FIX: Access .current
+                        if (handleDeleteSampler()) menuRef.current?.close()
                     },
                     warning: true,
                 },
