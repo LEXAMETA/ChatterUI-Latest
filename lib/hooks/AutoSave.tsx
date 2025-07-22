@@ -29,7 +29,8 @@ function useDebounce<TData>(data: TData, interval: number) {
                 clearTimeout(handler)
             }
         }
-        // explicit void return for TS
+        // explicit void return for TS (now correctly applied to the 'else' path)
+        return undefined
     }, [data, interval])
 
     return liveData

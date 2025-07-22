@@ -21,8 +21,7 @@ import { characterTags, tags } from 'db/schema'
 import { count, eq } from 'drizzle-orm'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
 import { useNavigation, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
-import type { RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -63,15 +62,11 @@ const CharacterEditor = () => {
     const [edited, setEdited] = useState(false)
     const [altSwipeIndex, setAltSwipeIndex] = useState(0)
 
-    // Clamp altSwipeIndex whenever greetings length changes to avoid out-of-bounds
     useEffect(() => {
         if (characterCard) {
             const length = characterCard.alternate_greetings.length
-            if (length === 0) {
-                setAltSwipeIndex(0)
-            } else if (altSwipeIndex >= length) {
-                setAltSwipeIndex(length - 1)
-            }
+            if (length === 0) setAltSwipeIndex(0)
+            else if (altSwipeIndex >= length) setAltSwipeIndex(length - 1)
         }
     }, [characterCard?.alternate_greetings.length, altSwipeIndex])
 
@@ -95,9 +90,7 @@ const CharacterEditor = () => {
                 },
                 {
                     label: 'Discard Changes',
-                    onPress: () => {
-                        navigation.dispatch(data.action)
-                    },
+                    onPress: () => navigation.dispatch(data.action),
                     type: 'warning',
                 },
             ],
@@ -187,9 +180,7 @@ const CharacterEditor = () => {
             { id: id, greeting: '', character_id: charId },
         ]
         setCharacterCardEdited({ ...characterCard, alternate_greetings: greetings })
-        if (characterCard.alternate_greetings.length !== 0) {
-            setAltSwipeIndex(altSwipeIndex + 1)
-        }
+        if (characterCard.alternate_greetings.length !== 0) setAltSwipeIndex(altSwipeIndex + 1)
     }
 
     const deleteAltMessageRoutine = async () => {
@@ -339,18 +330,11 @@ const CharacterEditor = () => {
                         numberOfLines={8}
                     />
 
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                        }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={{ color: color.text._100 }}>
                             Alternate Greetings
                             {characterCard.alternate_greetings.length !== 0 && (
-                                <Text
-                                    style={{
-                                        color: color.text._100,
-                                    }}>
+                                <Text style={{ color: color.text._100 }}>
                                     {altSwipeIndex + 1} / {characterCard.alternate_greetings.length}
                                 </Text>
                             )}
@@ -530,6 +514,7 @@ const useStyles = () => {
         avatar: {
             width: 80,
             height: 80,
+            // eslint-disable-next-line internal/enforce-spacing-values
             borderRadius: 40,
         },
         editHover: {

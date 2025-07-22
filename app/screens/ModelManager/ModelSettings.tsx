@@ -29,7 +29,7 @@ const PopupIcons = {
 type PopupMenuItem = {
     label: string
     onPress: (...args: any[]) => void
-    icon: keyof typeof PopupIcons // keys: "database" | "exclamationcircleo" | "file1" | "close" | "pluscircleo"
+    icon: keyof typeof PopupIcons
 }
 
 type FileEntry = {
@@ -185,7 +185,7 @@ const LoRAPicker: React.FC<LoRAPickerProps> = React.memo(
             const options: PopupMenuItem[] = availableLoRAs.map((file) => ({
                 label: file.name,
                 onPress: () => onSelect(file),
-                icon: 'file1', // use keys as string literals
+                icon: 'file1',
             }))
             options.push(
                 {
@@ -256,16 +256,14 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
         getLoRAUriForModelId
     )
 
-    const handleExit = useCallback(() => {
-        exit()
-    }, [exit])
+    const handleExit = useCallback(() => exit(), [exit])
 
     const handleImportLoRAFile = useCallback(async () => {
         setModelImporting(true)
         try {
             const result = await pickFile('application/octet-stream', false)
-            if (result && result.uri) {
-                const loraFileName = result.name || result.uri.split('/').pop() || 'imported_lora'
+            if (result?.uri) {
+                const loraFileName = result.name ?? result.uri.split('/').pop() ?? 'imported_lora'
                 const destUri = `${LlamaModule.AppDirectory.LoRAPath}${loraFileName}`
 
                 const info = await FileSystem.getInfoAsync(destUri)
