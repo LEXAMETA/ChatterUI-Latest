@@ -1,11 +1,10 @@
 import { localDownload } from '@vali98/react-native-fs'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system'
-import { Platform } from 'react-native' // For platform-specific handling
+import { Platform } from 'react-native'
 
-import { Logger } from '../state/Logger' // Replace with console if Logger not available
+import { Logger } from '../state/Logger'
 
-// App-specific directories for organized file storage
 export const AppDirectory = {
     ModelPath: `${FileSystem.documentDirectory}models/`,
     SessionPath: `${FileSystem.documentDirectory}session/`,
@@ -13,9 +12,6 @@ export const AppDirectory = {
     Assets: `${FileSystem.documentDirectory}appAssets/`,
 }
 
-/**
- * Information about a picked file.
- */
 export interface PickedFileInfo {
     uri: string
     name: string
@@ -23,16 +19,9 @@ export interface PickedFileInfo {
     size: number | null
 }
 
-/**
- * Pick a file using Expo DocumentPicker.
- *
- * @param type MIME type or array of MIME types. Defaults to "*\/*".
- * @param copyToCacheDirectory Whether to copy file to app cache directory to ease reading. Defaults to true.
- * @returns PickedFileInfo object with file info or null if cancelled or error.
- */
 export async function pickFile(
-    type: string | string[] = '*\/*',
-    copyToCacheDirectory: boolean = true
+    type: string | string[] = '*/*',
+    copyToCacheDirectory = true
 ): Promise<PickedFileInfo | null> {
     try {
         const result = await DocumentPicker.getDocumentAsync({
@@ -40,124 +29,64 @@ export async function pickFile(
             copyToCacheDirectory,
         })
 
-        // --- FIXES START HERE ---
-        // Check for cancellation first, then process success result
         if (result.canceled) {
-            if (Logger?.info) {
-                Logger.info('File picking cancelled.')
-            } else {
-                console.log('File picking cancelled.')
-            }
+            Logger?.info('File picking cancelled.') || console.log('File picking cancelled.')
             return null
         }
 
-        // Now, if not cancelled, it must be a success result, and we can access 'assets'
-        // Ensure assets array exists and has at least one item
         if (Array.isArray(result.assets) && result.assets.length > 0) {
             const asset = result.assets[0]
-            // Add explicit check for 'asset' being defined, although the array.length check implies it
-            // This satisfies TS18048 more directly in some cases, or implies result.assets[0] is not undefined.
             if (!asset) {
-                // Defensive check, should rarely be hit after result.assets.length > 0
-                if (Logger?.warn) {
-                    Logger.warn('No asset found in document picker result array.')
-                } else {
+                Logger?.warn('No asset found in document picker result array.') ||
                     console.warn('No asset found in document picker result array.')
-                }
                 return null
             }
             return {
                 uri: asset.uri,
                 name: asset.name,
-                mimeType: asset.mimeType ?? null, // Use nullish coalescing for optional properties
-                size: asset.size ?? null, // Use nullish coalescing for optional properties
+                mimeType: asset.mimeType ?? null,
+                size: asset.size ?? null,
             }
         } else {
-            // This path would be hit if result is not cancelled but assets array is empty
-            if (Logger?.info) {
-                Logger.info('File picking completed, but no file selected (empty assets array).')
-            } else {
+            Logger?.info('File picking completed, but no file selected (empty assets array).') ||
                 console.log('File picking completed, but no file selected (empty assets array).')
-            }
             return null
         }
-        // --- FIXES END HERE ---
     } catch (error) {
-        if (Logger?.error) {
-            Logger.error('Error picking file:', error)
-        } else {
-            console.error('Error picking file:', error)
-        }
+        Logger?.error('Error picking file:', error) || console.error('Error picking file:', error)
         return null
     }
 }
 
-/**
- * Read file content as a string from a URI.
- *
- * @param uri File URI
- * @param encoding Encoding type: utf8 or base64. Defaults to UTF8.
- * @returns File content string or null if error.
- */
 export async function readFileContent(
     uri: string,
     encoding: FileSystem.EncodingType = FileSystem.EncodingType.UTF8
 ): Promise<string | null> {
     try {
-        const content = await FileSystem.readAsStringAsync(uri, { encoding })
-        return content
+        return await FileSystem.readAsStringAsync(uri, { encoding })
     } catch (error) {
-        if (Logger?.error) {
-            Logger.error('Error reading file content from URI:', uri, error)
-        } else {
+        Logger?.error('Error reading file content from URI:', uri, error) ||
             console.error('Error reading file content from URI:', uri, error)
-        }
         return null
     }
 }
 
-/**
- * Read a binary file URI for native module consumption.
- * Often native modules accept a file URI string directly.
- *
- * @param uri File URI
- * @returns URI string or null on error
- */
 export async function readBinaryFile(uri: string): Promise<string | null> {
     try {
-        // Returning URI directly for native modules that accept file URIs.
         return uri
     } catch (error) {
-        if (Logger?.error) {
-            Logger.error('Error reading binary file:', error)
-        } else {
+        Logger?.error('Error reading binary file:', error) ||
             console.error('Error reading binary file:', error)
-        }
         return null
     }
 }
 
-/**
- * Get file extension from a filename.
- *
- * @param filename Filename string
- * @returns Extension in lowercase or null if none found
- */
 export function getFileExtension(filename: string): string | null {
     const parts = filename.split('.')
-    if (parts.length > 1) {
-        return parts.pop()?.toLowerCase() ?? null
-    }
+    if (parts.length > 1) return parts.pop()?.toLowerCase() ?? null
     return null
 }
 
-/**
- * Copy a file to the app's document directory under a given filename.
- *
- * @param sourceUri Source file URI
- * @param destinationFileName Destination filename with extension
- * @returns Destination URI or null on failure
- */
 export async function copyFileToAppDirectory(
     sourceUri: string,
     destinationFileName: string
@@ -172,28 +101,18 @@ export async function copyFileToAppDirectory(
             from: sourceUri,
             to: destinationPath,
         })
-        if (Logger?.info) {
-            Logger.info(`File copied from ${sourceUri} to ${destinationPath}`)
-        } else {
+
+        Logger?.info(`File copied from ${sourceUri} to ${destinationPath}`) ||
             console.log(`File copied from ${sourceUri} to ${destinationPath}`)
-        }
+
         return destinationPath
     } catch (error) {
-        if (Logger?.error) {
-            Logger.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error)
-        } else {
+        Logger?.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error) ||
             console.error(`Error copying file from ${sourceUri} to ${destinationFileName}:`, error)
-        }
         return null
     }
 }
 
-/**
- * Check if a file exists in the app's document directory.
- *
- * @param fileName Filename to check
- * @returns True if file exists, false otherwise
- */
 export async function fileExistsInAppDirectory(fileName: string): Promise<boolean> {
     try {
         const appDir = FileSystem.documentDirectory
@@ -201,22 +120,12 @@ export async function fileExistsInAppDirectory(fileName: string): Promise<boolea
         const fileInfo = await FileSystem.getInfoAsync(`${appDir}${fileName}`)
         return !!fileInfo.exists
     } catch (error) {
-        if (Logger?.error) {
-            Logger.error(`Error checking if file exists: ${fileName}`, error)
-        } else {
+        Logger?.error(`Error checking if file exists: ${fileName}`, error) ||
             console.error(`Error checking if file exists: ${fileName}`, error)
-        }
         return false
     }
 }
 
-/**
- * Save string data to a cache directory and trigger download (in React Native environment).
- *
- * @param data String data to save
- * @param filename Filename with extension
- * @param encoding Encoding type: 'base64' or 'utf8'
- */
 export const saveStringToDownload = async (
     data: string,
     filename: string,
@@ -228,25 +137,14 @@ export const saveStringToDownload = async (
         })
         await localDownload(FileSystem.cacheDirectory?.replace('file://', '') + filename)
     } catch (e) {
-        if (Logger?.error) {
-            Logger.error('Failed to download: ' + e)
-        } else {
-            console.error('Failed to download: ' + e)
-        }
+        Logger?.error('Failed to download: ' + e) || console.error('Failed to download: ' + e)
     }
 }
 
 type PickerResult = { success: false } | { success: true; data: string }
-
 type JSONPickerResult = { success: false } | { success: true; data: any }
 
-/**
- * Pick a JSON document and parse it.
- *
- * @param multiple Allow multiple selection - currently unused
- * @returns Parsed JSON data or failure
- */
-export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONPickerResult> => {
+export const pickJSONDocument = async (multiple = false): Promise<JSONPickerResult> => {
     const result = await pickStringDocument({ type: 'application/json', multiple })
     if (!result.success) return result
 
@@ -254,28 +152,15 @@ export const pickJSONDocument = async (multiple: boolean = false): Promise<JSONP
         const jsonData = JSON.parse(result.data)
         return { success: true, data: jsonData }
     } catch {
-        if (Logger?.error) {
-            Logger.error('Failed to parse JSON data')
-        } else {
-            console.error('Failed to parse JSON data')
-        }
+        Logger?.error('Failed to parse JSON data') || console.error('Failed to parse JSON data')
         return { success: false }
     }
 }
 
-/**
- * Pick a document as a string with specified encoding and MIME type.
- *
- * @param options Options object:
- * multiple - whether to allow multiple selection (unused)
- * encoding - encoding for read file ("utf8" or "base64"), default "utf8"
- * type - MIME type filter, default "*\/*"
- * @returns Success with string data or failure
- */
 export const pickStringDocument = async ({
     multiple = false,
     encoding = 'utf8',
-    type = '*\/*',
+    type = '*/*',
 }: {
     multiple?: boolean
     encoding?: 'utf8' | 'base64'
@@ -283,56 +168,30 @@ export const pickStringDocument = async ({
 } = {}): Promise<PickerResult> => {
     try {
         const result = await DocumentPicker.getDocumentAsync({ type })
-        // --- FIXES START HERE ---
-        // Check for cancellation first
-        if (result.canceled) {
-            return { success: false }
-        }
 
-        // Now, if not cancelled, it's a success result.
-        // Access 'assets' directly from 'result' as per DocumentPickerSuccessResult
-        if (!Array.isArray(result.assets) || result.assets.length === 0) {
-            // This case implies a success result with no assets (shouldn't happen often, but good to guard)
-            return { success: false }
-        }
+        if (result.canceled) return { success: false }
+        if (!Array.isArray(result.assets) || result.assets.length === 0) return { success: false }
 
-        // FIX: Add non-null assertion '!' to asset
         const asset = result.assets[0]!
-        // Explicitly check if asset.uri is present before using it
         if (!asset.uri) return { success: false }
 
         const data = await FileSystem.readAsStringAsync(asset.uri, { encoding }).catch((e) => {
-            if (Logger?.info) {
-                Logger.info(`Failed to read file: ${e}`)
-            } else {
-                console.log(`Failed to read file: ${e}`)
-            }
+            Logger?.info(`Failed to read file: ${e}`) || console.log(`Failed to read file: ${e}`)
             return null
         })
-        if (data === null) return { success: false }
 
+        if (data === null) return { success: false }
         return { success: true, data }
-        // --- FIXES END HERE ---
     } catch (error) {
-        if (Logger?.error) {
-            Logger.error('Error picking string document:', error)
-        } else {
+        Logger?.error('Error picking string document:', error) ||
             console.error('Error picking string document:', error)
-        }
         return { success: false }
     }
 }
 
-// Constants for file size units
 const GB = 1000 ** 3
 const MB = 1000 ** 2
 
-/**
- * Convert file size in bytes to a human-readable string using MB or GB units.
- *
- * @param size Size in bytes
- * @returns Human-readable string like "12.34 MB" or "1.23 GB"
- */
 export const readableFileSize = (size: number): string => {
     if (size < GB) {
         return `${(size / MB).toFixed(2)} MB`

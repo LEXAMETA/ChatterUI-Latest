@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/prefer-optional-chain */
+
 import * as FileSystem from 'expo-file-system'
 
 export enum GGMLType {
@@ -92,7 +94,7 @@ export function checkGGMLDeprecated(type: number): boolean {
     )
 }
 
-// Helper to convert Base64 string to Uint8Array
+// Helper function to convert Base64 string to Uint8Array
 function base64ToUint8Array(base64: string): Uint8Array {
     if (typeof Buffer !== 'undefined' && Buffer.from) {
         return Uint8Array.from(Buffer.from(base64, 'base64'))
@@ -116,15 +118,12 @@ function readUInt32LE(bytes: Uint8Array, offset: number): number {
             `[GGML] Insufficient data to read 32-bit integer at offset ${offset}. Array length: ${bytes.length}`
         )
     }
-    // Wrap declarations in block to fix no-case-declarations warning
-    {
-        const b0 = bytes[offset]
-        const b1 = bytes[offset + 1]
-        const b2 = bytes[offset + 2]
-        const b3 = bytes[offset + 3]
+    const b0 = bytes[offset]
+    const b1 = bytes[offset + 1]
+    const b2 = bytes[offset + 2]
+    const b3 = bytes[offset + 3]
 
-        return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0
-    }
+    return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0
 }
 
 // Reads GGML model type from file header (partial header read)
@@ -150,7 +149,7 @@ export async function getGGMLTypeFromFile(filePath: string): Promise<GGMLType> {
             return GGMLType.UNKNOWN
         }
 
-        const GGUF_MAGIC = 0x46554747
+        const GGUF_MAGIC = 0x46554747 // 'GGUF'
 
         const magic = readUInt32LE(uint8Array, 0)
         if (magic !== GGUF_MAGIC) {
@@ -241,7 +240,6 @@ export async function getGGMLTypeFromFile(filePath: string): Promise<GGMLType> {
                 }
                 case 12: {
                     if (offset + 4 > uint8Array.length) break
-                    // arrayLength usage omitted as in original
                     valueSize = 4
                     break
                 }

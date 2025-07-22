@@ -50,7 +50,8 @@ function useAutosave<TData, TReturn>({
         if (initialRender.current) {
             initialRender.current = false
         } else {
-            async function callSave() {
+            const callSave = async () => {
+                // Changed line
                 await handleSave.current(debouncedValueToSave)
             }
             callSave()
@@ -68,7 +69,8 @@ function useAutosave<TData, TReturn>({
     useEffect(() => {
         return () => {
             if (saveOnUnmount) {
-                async function callSave() {
+                const callSave = async () => {
+                    // Changed line
                     await handleSave.current(valueOnCleanup.current)
                 }
                 callSave()

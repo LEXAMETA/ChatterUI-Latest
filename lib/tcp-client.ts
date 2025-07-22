@@ -31,10 +31,6 @@ export class TcpClient {
     private currentRequestResolve: ((response: Response) => void) | null = null
     private currentRequestReject: ((error: Error) => void) | null = null
 
-    constructor() {
-        // Initialized without socket; listeners attached after connect
-    }
-
     public setStatusCallback(
         callback: (status: 'Connected' | 'Connecting...' | 'Disconnected' | 'Error') => void
     ) {
@@ -108,7 +104,6 @@ export class TcpClient {
             this.socket = null
             this.updateStatus('Disconnected')
             this.isConnecting = false
-            // Reject any pending request on disconnect
             this.currentRequestReject?.(new Error('Disconnected while request was pending.'))
             this.currentRequestResolve = null
             this.currentRequestReject = null
@@ -123,6 +118,7 @@ export class TcpClient {
             throw new Error('TCP Client not connected. Cannot send data.')
         }
 
+        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         if (this.currentRequestResolve || this.currentRequestReject) {
             console.warn('[TcpClient] A previous request is still pending. Rejecting new request.')
             throw new Error('Another request is already in progress. Please wait.')
@@ -158,8 +154,8 @@ export class TcpClient {
 
                 console.log(`[TcpClient] Sending total message size: ${messageBuffer.length} bytes`)
                 this.socket?.write(messageBuffer, undefined, (error: any) => {
+                    clearTimeout(responseTimeout)
                     if (error) {
-                        clearTimeout(responseTimeout)
                         console.error('[TcpClient] Error writing to socket:', error.message)
                         this.updateStatus('Error')
                         this.currentRequestReject?.(
@@ -185,6 +181,7 @@ export class TcpClient {
         s.removeAllListeners()
 
         s.on('data', this.handleIncomingData.bind(this))
+
         s.on('close', () => {
             console.log(`[TcpClient] Socket closed.`)
             this.updateStatus('Disconnected')
