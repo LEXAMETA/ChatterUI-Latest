@@ -28,8 +28,7 @@ const detectFormat = (input: string): Formats => {
             if (asteriskContent) {
                 const quoteMatchesInAsterisk = asteriskContent.match(/"([^"]*)"/)
                 if (
-                    quoteMatchesInAsterisk &&
-                    quoteMatchesInAsterisk[1] !== undefined &&
+                    quoteMatchesInAsterisk?.[1] !== undefined &&
                     quoteMatchesInAsterisk[1].split(' ').length > 1
                 ) {
                     return Formats.AsteriskActionQuoteSpeech

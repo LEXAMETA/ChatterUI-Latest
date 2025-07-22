@@ -1,10 +1,11 @@
 import Alert from '@components/views/Alert'
 import Avatar from '@components/views/Avatar'
 import Drawer from '@components/views/Drawer'
-import PopupMenu from '@components/views/PopupMenu'
-import { PopupMenuHandle } from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu'
 import { Characters } from '@lib/state/Characters'
 import { Theme } from '@lib/theme/ThemeManager'
+import React from 'react' // Ensure React is imported
+import { RefObject } from 'react' // Import RefObject
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Menu } from 'react-native-popup-menu'
 
@@ -35,7 +36,8 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
         setCard: state.setCard,
     }))
 
-    const handleDeleteCard = async (menuRef: PopupMenuHandle) => {
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const handleDeleteCard = async (menuRef: RefObject<PopupMenuHandle>) => {
         Alert.alert({
             title: 'Delete User',
             description: `Are you sure you want to delete '${user.name}'?\nThis cannot be undone.`,
@@ -61,6 +63,7 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
                             // FIX: Add non-null assertion for list[0]
                             setCard(list[0]!.id)
                         })
+                        menuRef.current?.close() // FIX: Access .current
                     },
                     type: 'warning',
                 },
@@ -68,7 +71,8 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
         })
     }
 
-    const handleCloneCard = (menuRef: PopupMenuHandle) => {
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const handleCloneCard = (menuRef: RefObject<PopupMenuHandle>) => {
         Alert.alert({
             title: `Clone User`,
             description: `Are you sure you want to clone '${user.name}'?`,
@@ -77,7 +81,7 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
                 {
                     label: 'Clone User',
                     onPress: async () => {
-                        menuRef.close()
+                        menuRef.current?.close() // FIX: Access .current
                         await Characters.db.mutate.duplicateCard(user.id)
                     },
                 },
@@ -123,13 +127,13 @@ const UserListing: React.FC<CharacterListingProps> = ({ user }) => {
                         {
                             label: 'Clone',
                             icon: 'copy1',
-                            onPress: handleCloneCard,
+                            onPress: handleCloneCard, // This function is already correctly typed
                         },
                         {
                             label: 'Delete',
                             icon: 'delete',
                             warning: true,
-                            onPress: handleDeleteCard,
+                            onPress: handleDeleteCard, // This function is already correctly typed
                         },
                     ]}
                 />

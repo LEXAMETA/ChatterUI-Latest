@@ -5,11 +5,10 @@ import { Embeddings } from 'react-native-rag'
 
 import { getEmbeddingLlamaContext } from '../engine/Local/LlamaLocal'
 
-
 // FIX: Locally augment the LlamaContext interface to include the 'embedding' method
 // This tells TypeScript that LlamaContext objects *will* have this method at runtime.
 interface LlamaContextWithEmbedding extends LlamaContext {
-    embedding(content: string): Promise<{ embedding: number[] }>;
+    embedding(content: string): Promise<{ embedding: number[] }>
 }
 
 export class QwenLlamaRNEngine implements Embeddings {
@@ -38,7 +37,8 @@ export class QwenLlamaRNEngine implements Embeddings {
         try {
             // FIX: Ensure Llama.getEmbeddingLlamaContext() returns a context capable of embeddings.
             // (Assuming this method internally calls initLlama with `embedding: true`)
-            this.embeddingContext = await (getEmbeddingLlamaContext() as Promise<LlamaContextWithEmbedding>);
+            this.embeddingContext =
+                await (getEmbeddingLlamaContext() as Promise<LlamaContextWithEmbedding>)
             if (!this.embeddingContext) {
                 throw new Error(
                     'Failed to get Qwen Embedding Llama Context. Is the model selected in settings?'

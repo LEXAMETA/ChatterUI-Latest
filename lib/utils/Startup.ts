@@ -19,13 +19,13 @@ import { z } from 'zod'
 import { AppDirectory } from './File'
 import { lockScreenOrientation } from './Screen'
 import { AppSettings, AppSettingsDefault, Global } from '../constants/GlobalValues'
-import { useLlama } from '../engine/Local/LlamaLocal'   // useLlama for state management
+import { useLlama } from '../engine/Local/LlamaLocal' // useLlama for state management
 import { Characters } from '../state/Characters'
 import { Chats } from '../state/Chat'
+import { useEngineData } from '../state/EngineData' // <--- Added this import, assuming it's missing if you're not seeing it from previous outputs
 import { Logger } from '../state/Logger'
 import { mmkv } from '../storage/MMKV'
 import { Theme } from '../theme/ThemeManager'
-import { useEngineData } from '../state/EngineData' // <--- Added this import, assuming it's missing if you're not seeing it from previous outputs
 
 export const loadChatOnInit = async (): Promise<void> => {
     try {
@@ -102,7 +102,7 @@ const migrateModelData_0_8_4_to_0_8_5 = (): void => {
         mmkv.delete(oldDef)
 
         // Fix: Changed back to useEngineData as 'setLastModelLoaded' is on that store
-        useEngineData.getState().setLastModelLoaded(data) 
+        useEngineData.getState().setLastModelLoaded(data)
     } catch (error) {
         Logger.error('Failed migrating model data from 0.8.4 to 0.8.5: ' + (error as Error).message)
     }
@@ -175,7 +175,9 @@ const migratePresets_0_8_3_to_0_8_4 = async (): Promise<void> => {
                         name: item.replace('.json', ''),
                     })
                 } catch (innerError) {
-                    Logger.error(`Failed to migrate preset ${item}: ${(innerError as Error).message}`)
+                    Logger.error(
+                        `Failed to migrate preset ${item}: ${(innerError as Error).message}`
+                    )
                 }
             })
         )
@@ -231,10 +233,13 @@ const setDefaultCharacter = async (): Promise<void> => {
 }
 
 const setDefaultInstruct = (): void => {
-    Instructs.db.query.instructList()
+    Instructs.db.query
+        .instructList()
         .then(async (list) => {
             if (!list) {
-                Logger.error('Instruct database Invalid, this should not happen! Please report this!')
+                Logger.error(
+                    'Instruct database Invalid, this should not happen! Please report this!'
+                )
             } else if (list.length === 0) {
                 Logger.warn('No Instructs exist, creating default Instruct')
                 const id = await Instructs.generateInitialDefaults()

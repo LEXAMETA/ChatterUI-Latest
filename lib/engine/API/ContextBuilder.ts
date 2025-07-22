@@ -91,7 +91,9 @@ export const buildTextCompletionContext = (max_length: number, printTimings = tr
         // ** FIX START **
         // Check if swipe_data is undefined. If so, skip this message and continue to the next.
         if (!swipe_data) {
-            Logger.warn(`Swipe data for message ID ${message.id} at swipe_id ${message.swipe_id} is missing. Skipping this message in context build.`)
+            Logger.warn(
+                `Swipe data for message ID ${message.id} at swipe_id ${message.swipe_id} is missing. Skipping this message in context build.`
+            )
             index-- // Decrement index as this message is skipped
             is_last = false // Ensure is_last logic correctly moves on
             continue // Skip to the next message in the loop
@@ -243,7 +245,9 @@ export const buildChatCompletionContext = (
         // ** FIX START **
         // Check if swipe_data is undefined. If so, skip this message.
         if (!swipe_data) {
-            Logger.warn(`Swipe data for message ID ${message.id} at swipe_id ${message.swipe_id} is missing. Skipping this message in chat context build.`)
+            Logger.warn(
+                `Swipe data for message ID ${message.id} at swipe_id ${message.swipe_id} is missing. Skipping this message in chat context build.`
+            )
             index-- // Decrement index for the next iteration
             continue // Skip to the next message in the loop
         }
@@ -288,4 +292,3 @@ export const buildChatCompletionContext = (
 
     return output
 }
-

@@ -1,6 +1,6 @@
+import { useState, useEffect } from 'react'
 import { MMKV } from 'react-native-mmkv'
 import { StateStorage } from 'zustand/middleware'
-import { useState, useEffect } from 'react'
 
 export const mmkv = new MMKV()
 
@@ -23,17 +23,20 @@ export const mmkvStorage: StateStorage = {
  * @param defaultValue Boolean default value (false if omitted)
  * @returns [value, setter]
  */
-export function useMMKVBoolean(key: string, defaultValue = false): [boolean, (value: boolean) => void] {
-  const [value, setValue] = useState<boolean>(() => {
-    const stored = mmkv.getString(key)
-    if (stored === 'true') return true
-    if (stored === 'false') return false
-    return defaultValue
-  })
+export function useMMKVBoolean(
+    key: string,
+    defaultValue = false
+): [boolean, (value: boolean) => void] {
+    const [value, setValue] = useState<boolean>(() => {
+        const stored = mmkv.getString(key)
+        if (stored === 'true') return true
+        if (stored === 'false') return false
+        return defaultValue
+    })
 
-  useEffect(() => {
-    mmkv.set(key, value.toString())
-  }, [key, value])
+    useEffect(() => {
+        mmkv.set(key, value.toString())
+    }, [key, value])
 
-  return [value, setValue]
+    return [value, setValue]
 }

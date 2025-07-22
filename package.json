@@ -27,6 +27,7 @@
     "@expo/prebuild-config": "~8.0.0",
     "@expo/vector-icons": "^14.0.2",
     "@react-native-community/slider": "^4.5.5",
+    "@react-native-picker/picker": "^2.11.1",
     "@shopify/flash-list": "1.7.3",
     "@vali98/react-native-fs": "^0.1.0",
     "babel-plugin-inline-import": "^3.0.0",

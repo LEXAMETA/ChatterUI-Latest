@@ -6,7 +6,7 @@ export const getPngChunkText = (filedata: string) => {
     const chunk = extractChunks(bytes)
     // Ensure the result of decodePNG().text is a string before passing to atob.
     // If decodePNG().text could truly be empty/undefined, you'd need more robust handling.
-    const raw = atob(utf8Decode(decodePNG(chunk).text));
+    const raw = atob(utf8Decode(decodePNG(chunk).text))
     return JSON.parse(utf8Decode(Uint8Array.from(raw, (a) => a.charCodeAt(0))))
 }
 
@@ -98,8 +98,9 @@ function extractChunks(data: Uint8Array) {
 
 function decodePNG(data: Uint8Array) {
     const index = data.indexOf(0)
-    if (index === -1) { // Add a check if null terminator is not found
-        throw new Error('Null terminator not found in PNG data for keyword/text separation.');
+    if (index === -1) {
+        // Add a check if null terminator is not found
+        throw new Error('Null terminator not found in PNG data for keyword/text separation.')
     }
 
     const name = data.slice(0, index)
@@ -135,7 +136,6 @@ const T0 = signed_crc_table()
 // THIS IS THE CORRECTLY ADDED LINE
 const TT = slice_by_16_tables(T0)
 
-
 function slice_by_16_tables(T: Int32Array) {
     let c = 0
     let v = 0
@@ -157,9 +157,8 @@ function slice_by_16_tables(T: Int32Array) {
     const out: Int32Array[] = []
 
     for (n = 1; n !== 16; ++n) {
-      out[n - 1] = table.subarray(n * 256, n * 256 + 256);
+        out[n - 1] = table.subarray(n * 256, n * 256 + 256)
     }
-
 
     return out
 }
@@ -167,12 +166,23 @@ function slice_by_16_tables(T: Int32Array) {
 // Destructuring assignment with default empty arrays to handle potential undefined
 // This ensures Tf, Te, etc., are always Int32Array references.
 const [
-    T1 = new Int32Array(), T2 = new Int32Array(), T3 = new Int32Array(), T4 = new Int32Array(),
-    T5 = new Int32Array(), T6 = new Int32Array(), T7 = new Int32Array(), T8 = new Int32Array(),
-    T9 = new Int32Array(), Ta = new Int32Array(), Tb = new Int32Array(), Tc = new Int32Array(),
-    Td = new Int32Array(), Te = new Int32Array(), Tf = new Int32Array(), ..._
-] = TT;
-
+    T1 = new Int32Array(),
+    T2 = new Int32Array(),
+    T3 = new Int32Array(),
+    T4 = new Int32Array(),
+    T5 = new Int32Array(),
+    T6 = new Int32Array(),
+    T7 = new Int32Array(),
+    T8 = new Int32Array(),
+    T9 = new Int32Array(),
+    Ta = new Int32Array(),
+    Tb = new Int32Array(),
+    Tc = new Int32Array(),
+    Td = new Int32Array(),
+    Te = new Int32Array(),
+    Tf = new Int32Array(),
+    ..._
+] = TT
 
 function crc32_buf(B: Uint8Array) {
     let C = -1,
@@ -201,7 +211,6 @@ function crc32_buf(B: Uint8Array) {
             T0[B[i++]!]!
     }
 
-
     L += 15
 
     while (i < L) C = (C >>> 8) ^ T0[(C ^ B[i++]!) & 0xff]! // Add non-null assertions
@@ -217,18 +226,19 @@ const utf8Decode = (bytes: Uint8Array): string => {
         // Add checks for `bytes[i++]` to ensure it's not undefined
         // If `bytes[i++]` is undefined, it means the byte sequence is malformed.
         const byte1 = bytes[i++]
-        if (byte1 === undefined) break; // Exit loop if byte is missing
-        
+        if (byte1 === undefined) break // Exit loop if byte is missing
+
         if (byte1 < 0x80) {
             string += String.fromCharCode(byte1)
         } else if (byte1 < 0xe0) {
             const byte2 = bytes[i++]
-            if (byte2 === undefined) throw new Error('Malformed UTF-8: Missing byte 2'); // Error for malformed sequence
+            if (byte2 === undefined) throw new Error('Malformed UTF-8: Missing byte 2') // Error for malformed sequence
             string += String.fromCharCode(((byte1 & 0x1f) << 6) | (byte2 & 0x3f))
         } else if (byte1 < 0xf0) {
             const byte2 = bytes[i++]
             const byte3 = bytes[i++]
-            if (byte2 === undefined || byte3 === undefined) throw new Error('Malformed UTF-8: Missing byte(s) for 3-byte sequence');
+            if (byte2 === undefined || byte3 === undefined)
+                throw new Error('Malformed UTF-8: Missing byte(s) for 3-byte sequence')
             string += String.fromCharCode(
                 ((byte1 & 0x0f) << 12) | ((byte2 & 0x3f) << 6) | (byte3 & 0x3f)
             )
@@ -236,7 +246,8 @@ const utf8Decode = (bytes: Uint8Array): string => {
             const byte2 = bytes[i++]
             const byte3 = bytes[i++]
             const byte4 = bytes[i++]
-            if (byte2 === undefined || byte3 === undefined || byte4 === undefined) throw new Error('Malformed UTF-8: Missing byte(s) for 4-byte sequence');
+            if (byte2 === undefined || byte3 === undefined || byte4 === undefined)
+                throw new Error('Malformed UTF-8: Missing byte(s) for 4-byte sequence')
             const codepoint =
                 (((byte1 & 0x07) << 18) |
                     ((byte2 & 0x3f) << 12) |

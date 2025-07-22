@@ -325,12 +325,12 @@ export namespace Instructs {
         export namespace mutate {
             export const createInstruct = async (instruct: InstructType): Promise<number> => {
                 const { id, ...input } = instruct
-                        const returned = await database
-            .insert(instructs)
-            .values(input)
-            .returning({ newid: instructs.id })
+                const returned = await database
+                    .insert(instructs)
+                    .values(input)
+                    .returning({ newid: instructs.id })
 
-        return returned[0]!.newid
+                return returned[0]!.newid
             }
 
             export const updateInstruct = async (id: number, instruct: InstructType) => {

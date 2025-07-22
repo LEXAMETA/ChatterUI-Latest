@@ -6,7 +6,8 @@ import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // impo
 import { DefaultColorSchemes, ThemeColor } from '@lib/theme/ThemeColor'
 import { Theme } from '@lib/theme/ThemeManager'
 import { pickJSONDocument } from '@lib/utils/File'
-import React from 'react'
+import React from 'react' // Ensure React is imported
+import { RefObject } from 'react' // Import RefObject
 import { Text, TouchableOpacity, View, FlatList } from 'react-native'
 
 type ColorThemeItemProps = {
@@ -140,12 +141,13 @@ const ColorSelector = () => {
                             {
                                 label: 'Import Theme',
                                 icon: 'download',
-                                onPress: (m: PopupMenuHandle) => {
+                                onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                                    // FIX: Changed parameter type
                                     pickJSONDocument().then((result) => {
                                         if (!result.success) return
                                         addCustomColor(result.data)
                                     })
-                                    m.close() // Changed from m?.current?.close()
+                                    menuRef.current?.close() // FIX: Access .current
                                 },
                             },
                         ]}

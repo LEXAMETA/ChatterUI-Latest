@@ -53,11 +53,17 @@ const ChatTextLast: React.FC<ChatTextProps> = ({ nowGenerating, index }) => {
 
     useEffect(() => {
         if (firstRender.current) {
+            // Cleanup function for the first render.
+            // This return sets `firstRender.current` to false after the *initial* render is committed.
             return () => {
                 firstRender.current = false
             }
         }
+        // For subsequent renders, perform the height update
         requestAnimationFrame(() => updateHeight())
+        // Explicitly return undefined if no cleanup is needed for this path,
+        // to satisfy TypeScript's "not all code paths return a value" check.
+        return undefined
     }, [nowGenerating, buffer, swipeText])
 
     const filteredText = useTextFilter(swipeText?.trim() ?? '')

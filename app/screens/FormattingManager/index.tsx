@@ -9,7 +9,7 @@ import Alert from '@components/views/Alert'
 import FadeDownView from '@components/views/FadeDownView'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu'  // Import PopupMenuHandle
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // Import PopupMenuHandle
 import TextBoxModal from '@components/views/TextBoxModal'
 import { AppSettings } from '@lib/constants/GlobalValues'
 import useAutosave from '@lib/hooks/AutoSave'
@@ -20,7 +20,8 @@ import { Logger } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 import { saveStringToDownload } from '@lib/utils/File'
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite'
-import { useState } from 'react'
+import React, { useState } from 'react' // Ensure React is imported
+import { RefObject } from 'react' // Import RefObject
 import { SafeAreaView, ScrollView, Text, View } from 'react-native'
 import Markdown from 'react-native-markdown-display'
 import { useMMKVBoolean } from 'react-native-mmkv'
@@ -123,34 +124,38 @@ const FormattingManager = () => {
                 {
                     label: 'Create Config',
                     icon: 'addfile',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         setShowNewInstruct(true)
-                        menu.close() // Fixed here
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },
                 {
                     label: 'Export Config',
                     icon: 'download',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         handleExportPreset()
-                        menu.close() // Fixed here
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },
                 {
                     label: 'Delete Config',
                     icon: 'delete',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         handleDeletePreset()
-                        menu.close() // Fixed here
+                        menuRef.current?.close() // FIX: Access .current
                     },
                     warning: true,
                 },
                 {
                     label: 'Regenerate Default',
                     icon: 'reload1',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         handleRegenerateDefaults()
-                        menu.close() // Fixed here
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },
             ]}
@@ -162,7 +167,12 @@ const FormattingManager = () => {
     if (!currentInstruct) {
         return (
             <SafeAreaView
-                style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color.neutral._100 }}>
+                style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: color.neutral._100,
+                }}>
                 <Text style={{ color: color.text._900 }}>Loading formatting options...</Text>
             </SafeAreaView>
         )

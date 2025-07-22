@@ -6,7 +6,7 @@ import Alert from '@components/views/Alert'
 import FadeDownView from '@components/views/FadeDownView'
 import HeaderButton from '@components/views/HeaderButton'
 import HeaderTitle from '@components/views/HeaderTitle'
-import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // Import PopupMenuHandle type
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu'
 import TextBoxModal from '@components/views/TextBoxModal'
 import { Samplers } from '@lib/constants/SamplerData'
 import { APISampler } from '@lib/engine/API/APIBuilder.types'
@@ -17,7 +17,8 @@ import { Logger } from '@lib/state/Logger'
 import { SamplersManager } from '@lib/state/SamplerState'
 import { Theme } from '@lib/theme/ThemeManager'
 import { saveStringToDownload } from '@lib/utils/File'
-import { useState } from 'react'
+import React, { useState } from 'react' // Make sure React is imported for React.RefObject
+import { RefObject } from 'react' // Explicitly import RefObject
 import { ScrollView, StyleSheet, Text } from 'react-native'
 
 const SamplerMenu = () => {
@@ -112,32 +113,35 @@ const SamplerMenu = () => {
                 {
                     label: 'Create Sampler',
                     icon: 'addfile',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         setShowNewSampler(true)
-                        menu.close()
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },
                 {
                     label: 'Export Sampler',
                     icon: 'download',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         handleExportSampler()
-                        menu.close()
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },
                 /*{
                     label: 'Import Sampler',
                     icon: 'upload',
-                    onPress: (menu: PopupMenuHandle) => {
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => { // FIX: Changed parameter type
                         handleImportSampler()
-                        menu.close()
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },*/
                 {
                     label: 'Delete Sampler',
                     icon: 'delete',
-                    onPress: (menu: PopupMenuHandle) => {
-                        if (handleDeleteSampler()) menu.close()
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
+                        if (handleDeleteSampler()) menuRef.current?.close() // FIX: Access .current
                     },
                     warning: true,
                 },

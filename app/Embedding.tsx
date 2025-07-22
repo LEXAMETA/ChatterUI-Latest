@@ -1,351 +1,403 @@
-import React, { useState } from 'react';
+import { rawdb } from '@db'
+import { ContextParams, LlamaContext, initLlama } from 'cui-llama.rn'
+import { NativeEmbeddingResult } from 'cui-llama.rn/lib/typescript/NativeRNLlama'
+import * as FileSystem from 'expo-file-system'
+import React, { useState } from 'react'
 import {
-  View,
-  Button,
-  Text,
-  ActivityIndicator,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-} from 'react-native';
+    View,
+    Button,
+    Text,
+    ActivityIndicator,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    Platform,
+} from 'react-native'
+import { create } from 'zustand'
 
-import SectionTitle from './components/text/SectionTitle';
-import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File';
-import { Theme } from '../lib/theme/ThemeManager';
-import { ContextParams } from 'cui-llama.rn';
-import { LlamaContext, initLlama } from 'cui-llama.rn';
-import { NativeEmbeddingResult } from 'cui-llama.rn/lib/typescript/NativeRNLlama';
-import * as FileSystem from 'expo-file-system';
-import { create } from 'zustand';
-import { rawdb } from '@db';
+import SectionTitle from './components/text/SectionTitle'
+import { Theme } from '../lib/theme/ThemeManager'
+import { pickFile, readFileContent, AppDirectory } from '../lib/utils/File'
 
 // --- Zustand Store for Embedding State ---
 type EmbeddingStoreState = {
-  model: LlamaContext | undefined;
-  loadModel: (preset: ContextParams) => Promise<void>;
-  getEmbedding: (text: string) => Promise<NativeEmbeddingResult | undefined>;
-};
+    model: LlamaContext | undefined
+    loadModel: (preset: ContextParams) => Promise<void>
+    getEmbedding: (text: string) => Promise<NativeEmbeddingResult | undefined>
+}
 
 export const useEmbeddingStore = create<EmbeddingStoreState>()((set, get) => ({
-  model: undefined,
-  loadModel: async (preset: ContextParams) => {
-    try {
-      await FileSystem.makeDirectoryAsync(AppDirectory.ModelPath, { intermediates: true });
-      const model = await initLlama({
-        model: AppDirectory.ModelPath + 'allminifp16.gguf',
-        n_threads: preset.n_threads,
-        n_batch: preset.n_batch,
-        embedding: true,
-      });
-      if (!model) {
-        console.error('Failed to initialize Llama model.');
-        return;
-      }
-      set({ model });
-      console.log('Llama model loaded successfully.');
-    } catch (error) {
-      console.error('Error loading Llama model:', error);
-    }
-  },
-  getEmbedding: async (text: string) => {
-    try {
-      return await get()?.model?.embedding(text);
-    } catch (error) {
-      console.error('Error getting embedding:', error);
-      return undefined;
-    }
-  },
-}));
+    model: undefined,
+    loadModel: async (preset: ContextParams) => {
+        try {
+            await FileSystem.makeDirectoryAsync(AppDirectory.ModelPath, { intermediates: true })
+            const model = await initLlama({
+                model: AppDirectory.ModelPath + 'allminifp16.gguf',
+                n_threads: preset.n_threads,
+                n_batch: preset.n_batch,
+                embedding: true,
+            })
+            if (!model) {
+                console.error('Failed to initialize Llama model.')
+                return
+            }
+            set({ model })
+            console.log('Llama model loaded successfully.')
+        } catch (error) {
+            console.error('Error loading Llama model:', error)
+        }
+    },
+    getEmbedding: async (text: string) => {
+        try {
+            return await get()?.model?.embedding(text)
+        } catch (error) {
+            console.error('Error getting embedding:', error)
+            return undefined
+        }
+    },
+}))
 
 // --- Database Helpers ---
 const deleteTables = async () => {
-  try {
-    rawdb.execSync(`drop table if exists vec_examples`);
-    console.log('vec_examples table dropped.');
-  } catch (e) {
-    console.error('Error dropping table:', e);
-  }
-};
+    try {
+        rawdb.execSync(`drop table if exists vec_examples`)
+        console.log('vec_examples table dropped.')
+    } catch (e) {
+        console.error('Error dropping table:', e)
+    }
+}
 
 const createTables = async () => {
-  try {
-    await rawdb.execAsync(
-      `create virtual table vec_examples using vec0(
+    try {
+        await rawdb.execAsync(
+            `create virtual table vec_examples using vec0(
         id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
         sample_embedding float[8] distance_metric=cosine
       );`
-    );
-    console.log('vec_examples table created.');
-  } catch (e) {
-    console.error('Error creating table:', e);
-  }
-};
+        )
+        console.log('vec_examples table created.')
+    } catch (e) {
+        console.error('Error creating table:', e)
+    }
+}
 
 const insertData = async () => {
-  try {
-    rawdb.runSync(`insert into vec_examples(id, sample_embedding)
+    try {
+        rawdb.runSync(`insert into vec_examples(id, sample_embedding)
       values
         (1, '[-0.200, 0.250, 0.341, -0.211, 0.645, 0.935, -0.316, -0.924]'),
         (2, '[0.443, -0.501, 0.355, -0.771, 0.707, -0.708, -0.185, 0.362]'),
         (3, '[0.716, -0.927, 0.134, 0.052, -0.669, 0.793, -0.634, -0.162]'),
         (4, '[-0.710, 0.330, 0.656, 0.041, -0.990, 0.726, 0.385, -0.958]')
-    `);
-    console.log('Sample data inserted.');
-  } catch (e) {
-    console.error('Error inserting data:', e);
-  }
-};
+    `)
+        console.log('Sample data inserted.')
+    } catch (e) {
+        console.error('Error inserting data:', e)
+    }
+}
 
 interface EmbeddingScreenProps {}
 
 export default function EmbeddingScreen(props: EmbeddingScreenProps) {
-  const theme = Theme.useTheme();
+    const theme = Theme.useTheme()
 
-  const [loadingFile, setLoadingFile] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [fileContentPreview, setFileContentPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+    const [loadingFile, setLoadingFile] = useState(false)
+    const [fileName, setFileName] = useState<string | null>(null)
+    const [fileContentPreview, setFileContentPreview] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
 
-  const { loadModel, getEmbedding } = useEmbeddingStore((state) => ({
-    loadModel: state.loadModel,
-    getEmbedding: state.getEmbedding,
-  }));
+    const { loadModel, getEmbedding } = useEmbeddingStore((state) => ({
+        loadModel: state.loadModel,
+        getEmbedding: state.getEmbedding,
+    }))
 
-  const [textInput1, setTextInput1] = useState('');
-  const [textInput2, setTextInput2] = useState('');
-  const [embeddingOutput, setEmbeddingOutput] = useState('');
+    const [textInput1, setTextInput1] = useState('')
+    const [textInput2, setTextInput2] = useState('')
+    const [embeddingOutput, setEmbeddingOutput] = useState('')
 
-  const llamaConfig: ContextParams = {
-    model: AppDirectory.ModelPath + 'allminifp16.gguf',
-    n_threads: 4,
-    n_batch: 512,
-  };
-
-  const handlePickDataset = async () => {
-    setLoadingFile(true);
-    setFileName(null);
-    setFileContentPreview(null);
-    setError(null);
-    try {
-      const result = await pickFile('text/*');
-
-      if (!result) {
-        setFileName('Document picking cancelled or failed.');
-        setLoadingFile(false);
-        return;
-      }
-
-      setFileName(result.name);
-      const content = await readFileContent(result.uri);
-
-      if (content != null) {
-        setFileContentPreview(content.substring(0, 500) + (content.length > 500 ? '...' : ''));
-      } else {
-        setError('Failed to read file content.');
-      }
-    } catch (e: any) {
-      console.error('Error picking or reading dataset:', e);
-      setError(`Error: ${e.message}`);
-    } finally {
-      setLoadingFile(false);
-    }
-  };
-
-  const handleQueryDatabase = async () => {
-    const now = performance.now();
-
-    const inputVector = `[${Array(8)
-      .fill(0)
-      .map(() => 2 * (Math.random() - 0.5))
-      .join(', ')}]`;
-
-    try {
-      const data = await rawdb.getAllAsync(
-        `select id, distance from vec_examples where sample_embedding match '${inputVector}' order by distance limit 1`
-      );
-      setEmbeddingOutput(`Query Result: ${JSON.stringify(data)}\nTime: ${(performance.now() - now).toFixed(2)}ms`);
-    } catch (e: any) {
-      setEmbeddingOutput(`Error querying DB: ${e.message}`);
-    }
-  };
-
-  const handleTestEmbedding = async () => {
-    if (!textInput1 || !textInput2) {
-      setEmbeddingOutput('Please enter text in both fields.');
-      return;
-    }
-    const v1 = await getEmbedding(textInput1);
-    const v2 = await getEmbedding(textInput2);
-
-    if (!v1?.embedding || !v2?.embedding) {
-      setEmbeddingOutput('Failed to get embeddings for one or both texts.');
-      return;
+    const llamaConfig: ContextParams = {
+        model: AppDirectory.ModelPath + 'allminifp16.gguf',
+        n_threads: 4,
+        n_batch: 512,
     }
 
-    const embedding1: number[] = v1.embedding;
-    const embedding2: number[] = v2.embedding;
+    const handlePickDataset = async () => {
+        setLoadingFile(true)
+        setFileName(null)
+        setFileContentPreview(null)
+        setError(null)
+        try {
+            const result = await pickFile('text/*')
 
-    let s1 = 0,
-      s2 = 0,
-      dotprod = 0;
+            if (!result) {
+                setFileName('Document picking cancelled or failed.')
+                setLoadingFile(false)
+                return
+            }
 
-    const minLength = Math.min(embedding1.length, embedding2.length);
-    for (let i = 0; i < minLength; i++) {
-      dotprod += embedding1[i]! * embedding2[i]!; // <-- Non-null assertion added here!
-      s1 += embedding1[i]! ** 2;
-      s2 += embedding2[i]! ** 2;
+            setFileName(result.name)
+            const content = await readFileContent(result.uri)
+
+            if (content != null) {
+                setFileContentPreview(
+                    content.substring(0, 500) + (content.length > 500 ? '...' : '')
+                )
+            } else {
+                setError('Failed to read file content.')
+            }
+        } catch (e: any) {
+            console.error('Error picking or reading dataset:', e)
+            setError(`Error: ${e.message}`)
+        } finally {
+            setLoadingFile(false)
+        }
     }
 
-    const similarity = dotprod / (Math.sqrt(s1) * Math.sqrt(s2));
-    setEmbeddingOutput(`Cosine Similarity: ${similarity.toFixed(4)}`);
-  };
+    const handleQueryDatabase = async () => {
+        const now = performance.now()
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.color.neutral._100 }]}>
-      <SectionTitle>RAG Dataset Management</SectionTitle>
-      <Button title="Load Dataset from Device" onPress={handlePickDataset} disabled={loadingFile} />
+        const inputVector = `[${Array(8)
+            .fill(0)
+            .map(() => 2 * (Math.random() - 0.5))
+            .join(', ')}]`
 
-      {loadingFile && <ActivityIndicator color={theme.color.primary._500} style={styles.indicator} />}
-      {fileName && <Text style={[styles.text, { color: theme.color.text._900 }]}>Selected File: {fileName}</Text>}
-      {fileContentPreview && (
-        <View style={[styles.previewContainer, { backgroundColor: theme.color.neutral._100 }]}>
-          <Text style={[styles.previewText, { color: theme.color.text._900 }]}>
-            Content Preview:{"\n"}
-            {fileContentPreview}
-          </Text>
+        try {
+            const data = await rawdb.getAllAsync(
+                `select id, distance from vec_examples where sample_embedding match '${inputVector}' order by distance limit 1`
+            )
+            setEmbeddingOutput(
+                `Query Result: ${JSON.stringify(data)}\nTime: ${(performance.now() - now).toFixed(2)}ms`
+            )
+        } catch (e: any) {
+            setEmbeddingOutput(`Error querying DB: ${e.message}`)
+        }
+    }
+
+    const handleTestEmbedding = async () => {
+        if (!textInput1 || !textInput2) {
+            setEmbeddingOutput('Please enter text in both fields.')
+            return
+        }
+        const v1 = await getEmbedding(textInput1)
+        const v2 = await getEmbedding(textInput2)
+
+        if (!v1?.embedding || !v2?.embedding) {
+            setEmbeddingOutput('Failed to get embeddings for one or both texts.')
+            return
+        }
+
+        const embedding1: number[] = v1.embedding
+        const embedding2: number[] = v2.embedding
+
+        let s1 = 0,
+            s2 = 0,
+            dotprod = 0
+
+        const minLength = Math.min(embedding1.length, embedding2.length)
+        for (let i = 0; i < minLength; i++) {
+            dotprod += embedding1[i]! * embedding2[i]! // <-- Non-null assertion added here!
+            s1 += embedding1[i]! ** 2
+            s2 += embedding2[i]! ** 2
+        }
+
+        const similarity = dotprod / (Math.sqrt(s1) * Math.sqrt(s2))
+        setEmbeddingOutput(`Cosine Similarity: ${similarity.toFixed(4)}`)
+    }
+
+    return (
+        <View style={[styles.container, { backgroundColor: theme.color.neutral._100 }]}>
+            <SectionTitle>RAG Dataset Management</SectionTitle>
+            <Button
+                title="Load Dataset from Device"
+                onPress={handlePickDataset}
+                disabled={loadingFile}
+            />
+
+            {loadingFile && (
+                <ActivityIndicator color={theme.color.primary._500} style={styles.indicator} />
+            )}
+            {fileName && (
+                <Text style={[styles.text, { color: theme.color.text._900 }]}>
+                    Selected File: {fileName}
+                </Text>
+            )}
+            {fileContentPreview && (
+                <View
+                    style={[
+                        styles.previewContainer,
+                        { backgroundColor: theme.color.neutral._100 },
+                    ]}>
+                    <Text style={[styles.previewText, { color: theme.color.text._900 }]}>
+                        Content Preview:{'\n'}
+                        {fileContentPreview}
+                    </Text>
+                </View>
+            )}
+            {error && (
+                <Text style={[styles.errorText, { color: theme.color.error._500 }]}>{error}</Text>
+            )}
+
+            <View style={styles.separator} />
+
+            <SectionTitle>Llama Embedding & Vector DB</SectionTitle>
+            <TouchableOpacity
+                onPress={() => loadModel(llamaConfig)}
+                style={[styles.button, { backgroundColor: theme.color.primary._500 }]}>
+                <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                    Load Llama Embedding Model
+                </Text>
+            </TouchableOpacity>
+
+            <TextInput
+                value={textInput1}
+                onChangeText={setTextInput1}
+                placeholder="Enter text 1 for embedding"
+                placeholderTextColor={theme.color.text._400}
+                style={[
+                    styles.textInput,
+                    { color: theme.color.text._100, borderColor: theme.color.text._400 },
+                ]}
+            />
+            <TextInput
+                value={textInput2}
+                onChangeText={setTextInput2}
+                placeholder="Enter text 2 for embedding"
+                placeholderTextColor={theme.color.text._400}
+                style={[
+                    styles.textInput,
+                    { color: theme.color.text._100, borderColor: theme.color.text._400 },
+                ]}
+            />
+            <TouchableOpacity
+                onPress={handleTestEmbedding}
+                style={[styles.button, { backgroundColor: theme.color.primary._500 }]}>
+                <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                    Calculate Embedding Similarity
+                </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                onPress={() => {
+                    setTextInput1('')
+                    setTextInput2('')
+                    setEmbeddingOutput('')
+                }}
+                style={[styles.button, { backgroundColor: theme.color.neutral._500 }]}>
+                <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                    Clear Text Inputs
+                </Text>
+            </TouchableOpacity>
+
+            {embeddingOutput && (
+                <Text style={[styles.outputText, { color: theme.color.text._100 }]}>
+                    {embeddingOutput}
+                </Text>
+            )}
+
+            <View style={styles.separator} />
+
+            <SectionTitle>Vector Database Operations</SectionTitle>
+            <View style={styles.dbButtonContainer}>
+                <TouchableOpacity
+                    onPress={deleteTables}
+                    style={[styles.smallButton, { backgroundColor: theme.color.error._500 }]}>
+                    <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                        Delete DB
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={createTables}
+                    style={[styles.smallButton, { backgroundColor: theme.color.primary._500 }]}>
+                    <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                        Make DB
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={insertData}
+                    style={[styles.smallButton, { backgroundColor: theme.color.neutral._500 }]}>
+                    <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                        Insert Data
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={handleQueryDatabase}
+                    style={[styles.smallButton, { backgroundColor: theme.color.primary._500 }]}>
+                    <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>
+                        Query DB
+                    </Text>
+                </TouchableOpacity>
+            </View>
         </View>
-      )}
-      {error && <Text style={[styles.errorText, { color: theme.color.error._500 }]}>{error}</Text>}
-
-      <View style={styles.separator} />
-
-      <SectionTitle>Llama Embedding & Vector DB</SectionTitle>
-      <TouchableOpacity onPress={() => loadModel(llamaConfig)} style={[styles.button, { backgroundColor: theme.color.primary._500 }]}>
-        <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Load Llama Embedding Model</Text>
-      </TouchableOpacity>
-
-      <TextInput
-        value={textInput1}
-        onChangeText={setTextInput1}
-        placeholder="Enter text 1 for embedding"
-        placeholderTextColor={theme.color.text._400}
-        style={[styles.textInput, { color: theme.color.text._100, borderColor: theme.color.text._400 }]}
-      />
-      <TextInput
-        value={textInput2}
-        onChangeText={setTextInput2}
-        placeholder="Enter text 2 for embedding"
-        placeholderTextColor={theme.color.text._400}
-        style={[styles.textInput, { color: theme.color.text._100, borderColor: theme.color.text._400 }]}
-      />
-      <TouchableOpacity onPress={handleTestEmbedding} style={[styles.button, { backgroundColor: theme.color.primary._500 }]}>
-        <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Calculate Embedding Similarity</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => {
-          setTextInput1('');
-          setTextInput2('');
-          setEmbeddingOutput('');
-        }}
-        style={[styles.button, { backgroundColor: theme.color.neutral._500 }]}
-      >
-        <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Clear Text Inputs</Text>
-      </TouchableOpacity>
-
-      {embeddingOutput && (
-        <Text style={[styles.outputText, { color: theme.color.text._100 }]}>{embeddingOutput}</Text>
-      )}
-
-      <View style={styles.separator} />
-
-      <SectionTitle>Vector Database Operations</SectionTitle>
-      <View style={styles.dbButtonContainer}>
-        <TouchableOpacity onPress={deleteTables} style={[styles.smallButton, { backgroundColor: theme.color.error._500 }]}>
-          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Delete DB</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={createTables} style={[styles.smallButton, { backgroundColor: theme.color.primary._500 }]}>
-          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Make DB</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={insertData} style={[styles.smallButton, { backgroundColor: theme.color.neutral._500 }]}>
-          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Insert Data</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleQueryDatabase} style={[styles.smallButton, { backgroundColor: theme.color.primary._500 }]}>
-          <Text style={[styles.buttonText, { color: theme.color.text._100 }]}>Query DB</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-  },
-  indicator: {
-    marginVertical: 8,
-  },
-  text: {
-    marginTop: 12,
-  },
-  previewContainer: {
-    marginTop: 12,
-    padding: 8,
-    borderRadius: 8,
-    maxHeight: 150,
-    overflow: 'hidden',
-  },
-  previewText: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: 12,
-  },
-  errorText: {
-    marginTop: 12,
-    color: 'red',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#ccc',
-    marginVertical: 24,
-  },
-  button: {
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  buttonText: {
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  textInput: {
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginVertical: 8,
-    fontSize: 14,
-  },
-  outputText: {
-    marginTop: 12,
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: 12,
-  },
-  dbButtonContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  smallButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 8,
-    width: '48%',
-  },
-});
+    container: {
+        flex: 1,
+        padding: 24,
+    },
+    indicator: {
+        marginVertical: 8,
+    },
+    text: {
+        marginTop: 12,
+    },
+    previewContainer: {
+        marginTop: 12,
+        padding: 8,
+        borderRadius: 8,
+        maxHeight: 150,
+        overflow: 'hidden',
+    },
+    previewText: {
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 12,
+    },
+    errorText: {
+        marginTop: 12,
+        color: 'red',
+    },
+    separator: {
+        height: 1,
+        backgroundColor: '#ccc',
+        marginVertical: 24,
+    },
+    button: {
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginVertical: 8,
+    },
+    buttonText: {
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    textInput: {
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        marginVertical: 8,
+        fontSize: 14,
+    },
+    outputText: {
+        marginTop: 12,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f0f0f0',
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 12,
+    },
+    dbButtonContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginTop: 12,
+    },
+    smallButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginVertical: 8,
+        width: '48%',
+    },
+})

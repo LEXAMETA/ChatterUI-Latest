@@ -88,7 +88,7 @@ useInference.subscribe(({ nowGenerating }) => {
     if (!length) return
     if (!nowGenerating) {
         const message = data?.messages?.[length - 1]
-        if (!message || !message.swipes || !message.swipes[message.swipe_id]) return
+        if (!message?.swipes?.[message.swipe_id]) return
         useTTSState
             .getState()
             .handleEndGeneration(length - 1, message.swipes[message.swipe_id]!.swipe)

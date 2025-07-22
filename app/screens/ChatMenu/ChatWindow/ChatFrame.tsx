@@ -28,7 +28,7 @@ const ChatFrame: React.FC<ChatFrameProps> = ({ children, index, nowGenerating, i
     const swipe = message.swipes[message.swipe_id]
 
     const getDeltaTime = () => {
-        if (!swipe || !swipe.gen_finished || !swipe.gen_started) return 0
+        if (!swipe?.gen_finished || !swipe.gen_started) return 0
         const endTime = nowGenerating && isLast ? Date.now() : swipe.gen_finished.getTime()
         return Math.round(Math.max(0, (endTime - swipe.gen_started.getTime()) / 1000))
     }

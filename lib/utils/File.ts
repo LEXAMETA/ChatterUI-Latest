@@ -57,7 +57,8 @@ export async function pickFile(
             const asset = result.assets[0]
             // Add explicit check for 'asset' being defined, although the array.length check implies it
             // This satisfies TS18048 more directly in some cases, or implies result.assets[0] is not undefined.
-            if (!asset) { // Defensive check, should rarely be hit after result.assets.length > 0
+            if (!asset) {
+                // Defensive check, should rarely be hit after result.assets.length > 0
                 if (Logger?.warn) {
                     Logger.warn('No asset found in document picker result array.')
                 } else {
@@ -69,7 +70,7 @@ export async function pickFile(
                 uri: asset.uri,
                 name: asset.name,
                 mimeType: asset.mimeType ?? null, // Use nullish coalescing for optional properties
-                size: asset.size ?? null,         // Use nullish coalescing for optional properties
+                size: asset.size ?? null, // Use nullish coalescing for optional properties
             }
         } else {
             // This path would be hit if result is not cancelled but assets array is empty
@@ -81,7 +82,6 @@ export async function pickFile(
             return null
         }
         // --- FIXES END HERE ---
-
     } catch (error) {
         if (Logger?.error) {
             Logger.error('Error picking file:', error)
@@ -297,7 +297,7 @@ export const pickStringDocument = async ({
         }
 
         // FIX: Add non-null assertion '!' to asset
-        const asset = result.assets[0]! 
+        const asset = result.assets[0]!
         // Explicitly check if asset.uri is present before using it
         if (!asset.uri) return { success: false }
 

@@ -7,6 +7,8 @@ import { Logger, LogLevel } from '@lib/state/Logger'
 import { Theme } from '@lib/theme/ThemeManager'
 import { saveStringToDownload } from '@lib/utils/File'
 import { FlashList } from '@shopify/flash-list'
+import React from 'react' // Ensure React is imported
+import { RefObject } from 'react' // Import RefObject
 import { Text, View } from 'react-native'
 
 const Logs = () => {
@@ -64,17 +66,19 @@ const Logs = () => {
                 {
                     label: 'Export Logs',
                     icon: 'export',
-                    onPress: (m: PopupMenuHandle) => {   // use PopupMenuHandle here
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         handleExportLogs()
-                        m.close() // changed from m.current?.close()
+                        menuRef.current?.close() // FIX: Access .current
                     },
                 },
                 {
                     label: 'Flush Logs',
                     icon: 'delete',
-                    onPress: (m: PopupMenuHandle) => { // use PopupMenuHandle here
+                    onPress: (menuRef: RefObject<PopupMenuHandle>) => {
+                        // FIX: Changed parameter type
                         handleFlushLogs()
-                        m.close() // changed from m.current?.close()
+                        menuRef.current?.close() // FIX: Access .current
                     },
                     warning: true,
                 },

@@ -19,17 +19,30 @@ type ChatTextProps = {
 
 const ChatBody: React.FC<ChatTextProps> = ({ index, nowGenerating, isLastMessage, isGreeting }) => {
     const message = Chats.useEntryData(index)
+
     const { appMode } = useAppMode()
     const [showTPS, __] = useMMKVBoolean(AppSettings.ShowTokenPerSecond)
     const { color, spacing, borderRadius, fontSize } = Theme.useTheme()
     const showEditor = useChatEditorState((state) => state.show)
+
     const handleEnableEdit = () => {
-        if (!nowGenerating) showEditor(index)
+        if (!nowGenerating && message) {
+            showEditor(index)
+        }
     }
 
-    const hasSwipes = message?.swipes?.length > 1
+    if (!message) {
+        return null
+    }
+
+    const hasSwipes = message.swipes?.length > 1
     const showSwipe = !message.is_user && isLastMessage && (hasSwipes || !isGreeting)
-    const timings = message.swipes[message.swipe_id].timings
+
+    // FIX: Add optional chaining for `swipes` and the indexed access
+    // This correctly handles cases where `message.swipes` might be undefined,
+    // or `message.swipes[message.swipe_id]` might be undefined (e.g., out of bounds index).
+    const timings = message.swipes?.[message.swipe_id]?.timings
+
     return (
         <View>
             <TouchableOpacity
@@ -51,18 +64,20 @@ const ChatBody: React.FC<ChatTextProps> = ({ index, nowGenerating, isLastMessage
                 ) : (
                     <ChatText nowGenerating={nowGenerating} index={index} />
                 )}
-                {showTPS && appMode === 'local' && timings && (
-                    <Text
-                        style={{
-                            color: color.text._500,
-                            fontWeight: '300',
-                            textAlign: 'right',
-                            fontSize: fontSize.s,
-                        }}>
-                        {`Prompt: ${getFiniteValue(timings.prompt_per_second)} t/s`}
-                        {`   Text Gen: ${getFiniteValue(timings.predicted_per_second)} t/s`}
-                    </Text>
-                )}
+                {showTPS &&
+                    appMode === 'local' &&
+                    timings && ( // Ensure timings is not null before using
+                        <Text
+                            style={{
+                                color: color.text._500,
+                                fontWeight: '300',
+                                textAlign: 'right',
+                                fontSize: fontSize.s,
+                            }}>
+                            {`Prompt: ${getFiniteValue(timings.prompt_per_second)} t/s`}
+                            {`   Text Gen: ${getFiniteValue(timings.predicted_per_second)} t/s`}
+                        </Text>
+                    )}
             </TouchableOpacity>
             {showSwipe && (
                 <Swipes index={index} nowGenerating={nowGenerating} isGreeting={isGreeting} />
@@ -72,7 +87,7 @@ const ChatBody: React.FC<ChatTextProps> = ({ index, nowGenerating, isLastMessage
 }
 
 const getFiniteValue = (value: number | null) => {
-    if (!value || !isFinite(value)) return (0).toFixed(2)
+    if (value === null || !isFinite(value)) return (0).toFixed(2)
     return value.toFixed(2)
 }
 

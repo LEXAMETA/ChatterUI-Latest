@@ -49,7 +49,8 @@ const ChatText: React.FC<ChatTextProps> = ({ nowGenerating, index }) => {
                 firstRender.current = false
             }
         }
-        // requestAnimationFrame(() => updateHeight())
+        // requestAnimationFrame(() => updateHeight()) // This line was commented out
+        return undefined // Explicitly return undefined to satisfy TypeScript
     }, [swipeText])
 
     const filteredText = useTextFilter(swipeText?.trim() ?? '')

@@ -3,6 +3,7 @@ import { AppSettings } from '@lib/constants/GlobalValues'
 import { SamplerConfigData, SamplerID, Samplers } from '@lib/constants/SamplerData'
 import { Characters } from '@lib/state/Characters'
 import { Chats, useInference } from '@lib/state/Chat'
+import { useEngineData, EngineConfig } from '@lib/state/EngineData' // Corrected import path using @lib alias
 import { Instructs, InstructType } from '@lib/state/Instructs'
 import { Logger } from '@lib/state/Logger'
 import { SamplersManager } from '@lib/state/SamplerState'
@@ -13,7 +14,6 @@ import { CompletionTimings } from 'db/schema'
 import { APIConfiguration, APISampler, APIValues } from './API/APIBuilder.types'
 import { buildChatCompletionContext, buildTextCompletionContext } from './API/ContextBuilder'
 import { useLlama } from './Local/LlamaLocal' // Keep this import for the useLlama store
-import { useEngineData, EngineConfig } from '@lib/state/EngineData' // Corrected import path using @lib alias
 import { KV } from './Local/Model'
 
 export const localSamplerData: APISampler[] = [

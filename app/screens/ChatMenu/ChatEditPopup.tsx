@@ -1,11 +1,12 @@
 import Alert from '@components/views/Alert'
-import PopupMenu, { MenuRef } from '@components/views/PopupMenu'
+import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // FIX: Changed MenuRef to PopupMenuHandle
 import TextBoxModal from '@components/views/TextBoxModal'
-import { Characters } from '@lib/state/Characters'
+import { Characters } from '@lib/state/Characters' // FIX: Changed '=>' to 'from'
 import { Chats } from '@lib/state/Chat'
 import { Logger } from '@lib/state/Logger'
 import { saveStringToDownload } from '@lib/utils/File'
 import React, { useState } from 'react'
+import { RefObject } from 'react' // FIX: Import RefObject
 import { View } from 'react-native'
 
 type ChatEditPopupProps = {
@@ -27,7 +28,8 @@ const ChatEditPopup: React.FC<ChatEditPopupProps> = ({ item }) => {
 
     const { deleteChat, loadChat, chatId, unloadChat } = Chats.useChat()
 
-    const handleDeleteChat = (menuRef: MenuRef) => {
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const handleDeleteChat = (menuRef: RefObject<PopupMenuHandle>) => {
         Alert.alert({
             title: `Delete Chat`,
             description: `Are you sure you want to delete '${item.name}'? This cannot be undone.`,
@@ -39,15 +41,16 @@ const ChatEditPopup: React.FC<ChatEditPopupProps> = ({ item }) => {
                         await deleteChat(item.id)
                         if (charId && chatId === item.id) {
                             const returnedChatId = await Chats.db.query.chatNewestId(charId)
-                            const chatId = returnedChatId
+                            // Renamed `chatId` to `newChatId` to avoid shadowing the outer `chatId` constant
+                            const newChatId = returnedChatId
                                 ? returnedChatId
                                 : await Chats.db.mutate.createChat(charId)
-                            chatId && (await loadChat(chatId))
+                            newChatId && (await loadChat(newChatId))
                         } else if (item.id === chatId) {
                             Logger.errorToast(`Something went wrong with creating a default chat`)
                             unloadChat()
                         }
-                        menuRef.current?.close()
+                        menuRef.current?.close() // This should now be correct
                     },
                     type: 'warning',
                 },
@@ -55,7 +58,8 @@ const ChatEditPopup: React.FC<ChatEditPopupProps> = ({ item }) => {
         })
     }
 
-    const handleCloneChat = (menuRef: MenuRef) => {
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const handleCloneChat = (menuRef: RefObject<PopupMenuHandle>) => {
         Alert.alert({
             title: `Clone Chat`,
             description: `Are you sure you want to clone '${item.name}'?`,
@@ -65,17 +69,18 @@ const ChatEditPopup: React.FC<ChatEditPopupProps> = ({ item }) => {
                     label: 'Clone Chat',
                     onPress: async () => {
                         await Chats.db.mutate.cloneChat(item.id)
-                        menuRef.current?.close()
+                        menuRef.current?.close() // This should now be correct
                     },
                 },
             ],
         })
     }
 
-    const handleExportChat = async (menuRef: MenuRef) => {
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const handleExportChat = async (menuRef: RefObject<PopupMenuHandle>) => {
         const name = `Chatlogs-${charName}-${item.id}.json`.replaceAll(' ', '_')
         await saveStringToDownload(JSON.stringify(await Chats.db.query.chat(item.id)), name, 'utf8')
-        menuRef.current?.close()
+        menuRef.current?.close() // This should now be correct
         Logger.infoToast(`File: ${name} saved to downloads!`)
     }
 
@@ -105,7 +110,8 @@ const ChatEditPopup: React.FC<ChatEditPopupProps> = ({ item }) => {
                     {
                         label: 'Rename',
                         icon: 'edit',
-                        onPress: (menuRef) => {
+                        // FIX: Changed parameter type to RefObject<PopupMenuHandle> and accessed .current
+                        onPress: (menuRef: RefObject<PopupMenuHandle>) => {
                             setShowRename(true)
                             menuRef.current?.close()
                         },
@@ -113,23 +119,23 @@ const ChatEditPopup: React.FC<ChatEditPopupProps> = ({ item }) => {
                     {
                         label: 'Export',
                         icon: 'download',
-                        onPress: (menuRef) => handleExportChat(menuRef),
+                        onPress: handleExportChat, // handleExportChat is already correctly typed
                     },
                     {
                         label: 'Clone',
                         icon: 'copy1',
-                        onPress: handleCloneChat,
+                        onPress: handleCloneChat, // handleCloneChat is already correctly typed
                     },
                     {
                         label: 'Link User',
                         icon: 'user',
-                        onPress: handleLinkUser,
+                        onPress: handleLinkUser, // This handler doesn't use menuRef
                     },
                     {
                         label: 'Delete',
                         icon: 'delete',
                         warning: true,
-                        onPress: handleDeleteChat,
+                        onPress: handleDeleteChat, // handleDeleteChat is already correctly typed
                     },
                 ]}
             />

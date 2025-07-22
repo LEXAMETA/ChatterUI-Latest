@@ -204,7 +204,8 @@ export namespace Chats {
             // Ensure messages.length - 1 is valid before accessing. `messages.length > 0` already does this.
             // TS2532: Object is possibly 'undefined'.
             // Fix: Added a type assertion `as ChatEntry` to assure TypeScript that `messages[messages.length - 1]` is indeed a ChatEntry.
-            const order = messages.length > 0 ? (messages[messages.length - 1] as ChatEntry).order + 1 : 0
+            const order =
+                messages.length > 0 ? (messages[messages.length - 1] as ChatEntry).order + 1 : 0
 
             // Correctly reference `db` from `Chats.db.mutate.createEntry`
             const entry = await Chats.db.mutate.createEntry(chatId, name, is_user, order, message) // <-- Fix
@@ -268,7 +269,8 @@ export namespace Chats {
 
             // `chatSwipeId` can be a number or undefined.
             // If it's undefined, it's a problem, so ensure it's a number.
-            if (typeof chatSwipeId !== 'number') { // Changed from `!chatSwipeId`
+            if (typeof chatSwipeId !== 'number') {
+                // Changed from `!chatSwipeId`
                 Logger.error(`updateEntry: Invalid chatSwipeId for index ${index}`)
                 return
             }
@@ -280,7 +282,7 @@ export namespace Chats {
                 swipe: message,
                 gen_finished: updateFinished ? date : undefined,
                 gen_started: updateStarted ? date : undefined,
-                timings: resetTimings ? null : timings ?? undefined,
+                timings: resetTimings ? null : (timings ?? undefined),
             }
 
             // Correctly reference `db` from `Chats.db.mutate.updateChatSwipe`
@@ -403,19 +405,21 @@ export namespace Chats {
 
             const lastIndex = messages?.length ? messages.length - 1 : undefined
 
-            let targetSwipeId: number;
+            let targetSwipeId: number
             if (lastIndex !== undefined && messages) {
                 // Use a non-null assertion (!) here because we've checked `messages[lastIndex]` in the condition.
                 // TypeScript can sometimes be overly cautious with array indexing even after length checks.
-                const lastMessage = messages[lastIndex]!; // Assure TypeScript that lastMessage is defined
-                targetSwipeId = lastMessage.swipes[lastMessage.swipe_id]?.id ?? cachedSwipeId ?? NO_VALID_ENTRY;
+                const lastMessage = messages[lastIndex]! // Assure TypeScript that lastMessage is defined
+                targetSwipeId =
+                    lastMessage.swipes[lastMessage.swipe_id]?.id ?? cachedSwipeId ?? NO_VALID_ENTRY
             } else {
-                targetSwipeId = cachedSwipeId ?? NO_VALID_ENTRY;
+                targetSwipeId = cachedSwipeId ?? NO_VALID_ENTRY
             }
 
-
             if (targetSwipeId === NO_VALID_ENTRY) {
-                Logger.error('Attempted to insert to buffer, but no valid entry or swipeId was found!')
+                Logger.error(
+                    'Attempted to insert to buffer, but no valid entry or swipeId was found!'
+                )
                 return
             }
 
@@ -426,7 +430,8 @@ export namespace Chats {
             }
 
             // If there are no messages, or the last index is invalid, directly update the swipe
-            if (lastIndex === undefined || lastIndex < 0) { // lastIndex could be -1 if messages is empty
+            if (lastIndex === undefined || lastIndex < 0) {
+                // lastIndex could be -1 if messages is empty
                 // Correctly reference `db` from `Chats.db.mutate.updateChatSwipe`
                 await Chats.db.mutate.updateChatSwipe(updatedSwipe) // <-- Fix
             } else {
@@ -450,7 +455,7 @@ export namespace Chats {
             // this check makes it explicit.
             if (!lastMessage) {
                 Logger.warn('insertLastToBuffer: No last message found despite array length check.')
-                return;
+                return
             }
             // `lastMessage.swipes[lastMessage.swipe_id]` can still be undefined if swipe_id is out of bounds
             const lastSwipe = lastMessage.swipes[lastMessage.swipe_id] // Access safely with optional chaining on lastSwipe
@@ -807,7 +812,9 @@ export namespace Chats {
                             item2.entry_id = newEntryIdResult.newEntryId
                         })
                     } else {
-                        Logger.warn(`cloneChat: No new entry ID found for message at index ${index}.`)
+                        Logger.warn(
+                            `cloneChat: No new entry ID found for message at index ${index}.`
+                        )
                     }
                 })
 

@@ -1,3 +1,5 @@
+// app/components/views/PopupMenu.tsx
+
 import { AntDesign } from '@expo/vector-icons'
 import { Theme } from '@lib/theme/ThemeManager'
 import { useFocusEffect } from 'expo-router'
@@ -24,8 +26,11 @@ export type PopupMenuHandle = {
 type PopupOptionProps = {
     label: string
     icon?: keyof typeof AntDesign.glyphMap
-    onPress: (menuRef: PopupMenuHandle) => void | Promise<void>
+    // FIX 1: Change onPress signature to pass the RefObject directly
+    onPress: (menuRef: React.RefObject<PopupMenuHandle>) => void | Promise<void>
     warning?: boolean
+    // This `menuRef` is the one passed down from PopupMenu component,
+    // which is the `ref` object itself.
     menuRef: React.RefObject<PopupMenuHandle>
 }
 
@@ -45,16 +50,15 @@ const PopupOption: React.FC<PopupOptionProps> = ({
     onPress,
     label,
     icon,
-    menuRef,
+    menuRef, // This is already the RefObject<PopupMenuHandle>
     warning = false,
 }) => {
     const styles = useStyles()
     const { color } = Theme.useTheme()
 
     const handleOnPress = async () => {
-        if (menuRef.current) {
-            await onPress(menuRef.current)
-        }
+        // FIX 2: Now pass the RefObject directly to the onPress callback
+        await onPress(menuRef) // menuRef is already React.RefObject<PopupMenuHandle>
     }
 
     return (
@@ -77,18 +81,7 @@ const PopupOption: React.FC<PopupOptionProps> = ({
 }
 
 const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
-    (
-        {
-            disabled,
-            icon,
-            iconSize = 26,
-            style = {},
-            options,
-            children,
-            placement = 'left',
-        },
-        ref
-    ) => {
+    ({ disabled, icon, iconSize = 26, style = {}, options, children, placement = 'left' }, ref) => {
         const styles = useStyles()
         const { color } = Theme.useTheme()
         const menuStyle = useMenuStyle()
@@ -146,6 +139,8 @@ const PopupMenu = React.forwardRef<PopupMenuHandle, PopupMenuProps>(
                         <PopupOption
                             {...item}
                             key={item.label}
+                            // FIX 3: Pass the 'ref' directly down as the 'menuRef' prop
+                            // because PopupOption's onPress now expects RefObject<PopupMenuHandle>
                             menuRef={ref as React.RefObject<PopupMenuHandle>}
                             icon={item.icon}
                         />

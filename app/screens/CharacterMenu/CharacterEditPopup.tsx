@@ -2,6 +2,7 @@ import Alert from '@components/views/Alert'
 import PopupMenu, { PopupMenuHandle } from '@components/views/PopupMenu' // updated import
 import { CharInfo, Characters } from '@lib/state/Characters'
 import { useRouter } from 'expo-router'
+import React, { RefObject } from 'react' // Import RefObject
 
 type CharacterEditPopupProps = {
     characterInfo: CharInfo
@@ -20,7 +21,8 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
         setCurrentCard: state.setCard,
     }))
 
-    const deleteCard = (menuRef: PopupMenuHandle) => { // updated type here
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const deleteCard = (menuRef: RefObject<PopupMenuHandle>) => {
         Alert.alert({
             title: 'Delete Character',
             description: `Are you sure you want to delete '${characterInfo.name}'? This cannot be undone.`,
@@ -32,6 +34,7 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
                     label: 'Delete Character',
                     onPress: async () => {
                         Characters.db.mutate.deleteCard(characterInfo.id ?? -1)
+                        menuRef.current?.close() // FIX: Access .current
                     },
                     type: 'warning',
                 },
@@ -39,7 +42,8 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
         })
     }
 
-    const cloneCard = (menuRef: PopupMenuHandle) => { // updated type here
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const cloneCard = (menuRef: RefObject<PopupMenuHandle>) => {
         Alert.alert({
             title: 'Clone Character',
             description: `Are you sure you want to clone '${characterInfo.name}'?`,
@@ -52,7 +56,7 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
                     onPress: async () => {
                         setNowLoading(true)
                         await Characters.db.mutate.duplicateCard(characterInfo.id)
-                        menuRef.close()
+                        menuRef.current?.close() // FIX: Access .current
                         setNowLoading(false)
                     },
                 },
@@ -60,12 +64,13 @@ const CharacterEditPopup: React.FC<CharacterEditPopupProps> = ({
         })
     }
 
-    const editCharacter = async (menuRef: PopupMenuHandle) => { // updated type here
+    // FIX: Changed parameter type to RefObject<PopupMenuHandle>
+    const editCharacter = async (menuRef: RefObject<PopupMenuHandle>) => {
         if (nowLoading) return
         setNowLoading(true)
         await setCurrentCard(characterInfo.id)
         setNowLoading(false)
-        menuRef.close()
+        menuRef.current?.close() // FIX: Access .current
         router.push('/CharacterEditor')
     }
 
