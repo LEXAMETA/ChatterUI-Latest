@@ -1,7 +1,7 @@
 import { LlamaContext } from 'cui-llama.rn' // For LlamaContext
-import { LLM, Message } from 'react-native-rag' // For LLM and Message
+// import { LLM, Message } from 'react-native-rag' // For LLM and Message
 
-import { getRagReasoningLlamaContext } from '../engine/Local/LlamaLocal' // For the new Llama context function
+// import { getRagReasoningLlamaContext } from '../engine/Local/LlamaLocal' // For the new Llama context function
 
 export class PleiasRAGLLMWrapper implements LLM {
     private pleiasContext: LlamaContext | null = null

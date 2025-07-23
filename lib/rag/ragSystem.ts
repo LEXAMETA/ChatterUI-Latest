@@ -1,6 +1,6 @@
 // lib/rag/ragSystem.ts
 import { useEffect, useState } from 'react'
-import { useRAG, MemoryVectorStore } from 'react-native-rag'
+// import { useRAG, MemoryVectorStore } from 'react-native-rag'
 
 import { PleiasRAGLLMWrapper } from './PleiasRAGLLMWrapper'
 import { QwenLlamaRNEngine } from './QwenLlamaRNEngine'

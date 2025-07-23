@@ -1,7 +1,7 @@
 // lib/rag/QwenLlamaRNEngine.ts
 
 import { LlamaContext } from 'cui-llama.rn'
-import { Embeddings } from 'react-native-rag'
+// import { Embeddings } from 'react-native-rag'
 
 import { getEmbeddingLlamaContext } from '../engine/Local/LlamaLocal'
 
