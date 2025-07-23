@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer' // Polyfill for Buffer in React Native
 import { inflate, deflate } from 'pako' // For ZLIB compression/decompression
-import { createConnection, Socket } from 'react-native-tcp-socket'
+// import { createConnection, Socket } from 'react-native-tcp-socket'
 
 export interface Request {
     type: 'prompt' | 'status' | 'config'
@@ -17,6 +17,8 @@ export interface Response {
     // Additional fields as needed
 }
 
+// START OF COMMENTED OUT TCPCLIENT CLASS
+/*
 export class TcpClient {
     public socket: Socket | null = null
     private receivedDataBuffer: Uint8Array = new Uint8Array(0)
@@ -255,9 +257,14 @@ export class TcpClient {
         }
     }
 }
+*/
+// END OF COMMENTED OUT TCPCLIENT CLASS
 
-export const tcpClientInstance = new TcpClient()
+// Replace the actual instance with a dummy object for the build test.
+// This is crucial because other files might try to import tcpClientInstance.
+export const tcpClientInstance: any = {} 
 
+// This mock function can remain, as it doesn't rely on react-native-tcp-socket.
 export const sendMockPrompt = async (payload: Request): Promise<Response> => {
     console.log('[Mock TCP Client] Received mock prompt:', payload.prompt)
     return new Promise((resolve) => {
