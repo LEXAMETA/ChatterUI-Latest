@@ -3,7 +3,7 @@ const IS_DEV = process.env.APP_VARIANT === 'development'
 module.exports = {
     expo: {
         name: IS_DEV ? 'ChatterUI-Latest (DEV)' : 'ChatterUI-Latest',
-        newArchEnabled: true,
+        newArchEnabled: false,
         slug: 'chatterui-latest', // Keep slug for Expo
         version: '0.1.0',
         orientation: 'default',
