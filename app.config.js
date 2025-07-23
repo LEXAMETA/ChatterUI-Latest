@@ -18,7 +18,6 @@ module.exports = {
                 tinted: './assets/images/icon.png',
             },
             supportsTablet: true,
-            // FIX: Remove hyphens and make lowercase
             bundleIdentifier: IS_DEV ? 'com.chatterui.latest.dev' : 'com.chatterui.latest',
         },
         android: {
@@ -28,10 +27,8 @@ module.exports = {
                 monochromeImage: './assets/images/adaptive-icon-foreground.png',
                 backgroundColor: '#000',
             },
-            // FIX: Remove hyphens and make lowercase. Add a conventional prefix like 'com.'
             package: IS_DEV ? 'com.chatterui.latest.dev' : 'com.chatterui.latest',
-            // Also good practice to ensure versionCode is present, though not explicitly errored here.
-            versionCode: 1, // Add this if not present, or ensure it's an integer
+            versionCode: 1,
             userInterfaceStyle: 'dark',
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
@@ -62,6 +59,14 @@ module.exports = {
                         enableShrinkResourcesInReleaseBuilds: true,
                         useLegacyPackaging: true,
                         extraProguardRules: '-keep class com.rnllama.** { *; }',
+                        // --- ADD THESE NEW LINES ---
+                        extraMavenRepositories: [
+                            '../../node_modules/expo/android',
+                            '../../node_modules/expo-modules-core/android',
+                            '../../node_modules/react-native/android', // Include if you have RN specific modules
+                            '../../node_modules/jsc-android/dist', // Include if you have JSC specific modules
+                        ],
+                        // --- END NEW LINES ---
                     },
                 },
             ],
@@ -102,7 +107,6 @@ module.exports = {
             eas: {
                 projectId: '97c3263e-6c06-4869-8669-a571aaa37c5b',
             },
-            // --- ADD THIS NEW LINE ---
             EXPO_PUBLIC_BUILD_TARGET: process.env.EXPO_PUBLIC_BUILD_TARGET || 'native',
         },
     },
